@@ -13,6 +13,72 @@ import {
 const generateId = () => Math.random().toString(36).slice(2, 11);
 const generateSecret = () => "sk_live_" + Math.random().toString(36).slice(2, 26);
 
+type ActivityDetails = {
+  ip: string;
+  location: string;
+  device: string;
+  browser: string;
+};
+
+let cachedActivityDetails: Promise<ActivityDetails> | null = null;
+
+const parseDeviceAndBrowser = (userAgent: string): { device: string; browser: string } => {
+  const ua = userAgent.toLowerCase();
+  const device = /tablet|ipad|playbook|silk/.test(ua)
+    ? "Tablet"
+    : /mobi|iphone|android/.test(ua)
+    ? "Mobile"
+    : "Desktop";
+
+  let browser = "Unknown";
+  if (/edg\//.test(ua)) browser = "Edge";
+  else if (/opr\//.test(ua) || /opera/.test(ua)) browser = "Opera";
+  else if (/chrome\//.test(ua) && !/edg\//.test(ua) && !/opr\//.test(ua)) browser = "Chrome";
+  else if (/firefox\//.test(ua)) browser = "Firefox";
+  else if (/safari\//.test(ua) && !/chrome\//.test(ua)) browser = "Safari";
+  else if (/msie|trident/.test(ua)) browser = "Internet Explorer";
+
+  return { device, browser };
+};
+
+const fetchClientActivityDetails = async (): Promise<ActivityDetails> => {
+  if (cachedActivityDetails) return cachedActivityDetails;
+
+  cachedActivityDetails = (async () => {
+    const defaultDetails: ActivityDetails = {
+      ip: "Unknown IP",
+      location: "Unknown Location",
+      device: "Desktop",
+      browser: "Unknown",
+    };
+
+    if (typeof window === "undefined") {
+      return defaultDetails;
+    }
+
+    const userAgent = window.navigator.userAgent || "";
+    const parsed = parseDeviceAndBrowser(userAgent);
+    const details = { ...defaultDetails, ...parsed };
+
+    try {
+      const response = await fetch("https://ipapi.co/json/");
+      if (response.ok) {
+        const data = await response.json();
+        details.ip = data.ip || details.ip;
+        details.location = [data.city, data.region, data.country_name]
+          .filter(Boolean)
+          .join(", ") || data.country_name || details.location;
+      }
+    } catch {
+      // ignore failures and return defaults
+    }
+
+    return details;
+  })();
+
+  return cachedActivityDetails;
+};
+
 export const useStore = create<MockStore>((set, get) => ({
   users: initialUsers,
   roles: initialRoles,
@@ -38,18 +104,20 @@ export const useStore = create<MockStore>((set, get) => ({
       (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password
     );
 
-    // Helper function to log activity
-    const logActivity = (status: "success" | "failed" | "blocked", userData?: typeof user, reason?: string) => {
+    // Helper function to log activity with real client details
+    const logActivity = async (status: "success" | "failed" | "blocked", userData?: typeof user, reason?: string) => {
+      const activityDetails = await fetchClientActivityDetails();
       const activityEntry = {
         id: generateId(),
         userId: userData?.id || "",
         userEmail: email,
         userName: userData ? `${userData.firstName} ${userData.lastName}` : email,
         status,
-        ip: "192.168.1." + Math.floor(Math.random() * 254 + 1),
-        location: "Current Location",
-        device: "Desktop",
-        browser: "Chrome",
+        ip: activityDetails.ip,
+        location: activityDetails.location,
+        device: activityDetails.device,
+        browser: activityDetails.browser,
+        applicationName: "SSO Portal",
         timestamp: new Date().toISOString(),
         failureReason: reason,
       };
@@ -57,24 +125,24 @@ export const useStore = create<MockStore>((set, get) => ({
     };
 
     if (!user) {
-      logActivity("failed", undefined, "Invalid email or password");
+      await logActivity("failed", undefined, "Invalid email or password");
       return { success: false, error: "Invalid email or password. Please try again." };
     }
     if (user.status === "inactive") {
-      logActivity("failed", user, "Account inactive");
+      await logActivity("failed", user, "Account inactive");
       return { success: false, error: "Your account is inactive. Please contact support." };
     }
     if (user.status === "suspended") {
-      logActivity("blocked", user, "Account suspended");
+      await logActivity("blocked", user, "Account suspended");
       return { success: false, error: "Your account has been suspended. Please contact support." };
     }
     if (user.twoFactorEnabled) {
-      logActivity("success", user);
+      await logActivity("success", user);
       set((s) => ({ auth: { ...s.auth, step: "2fa", pendingUserId: user.id } }));
       return { success: true, requires2FA: true };
     }
     // Log activity and authenticate
-    logActivity("success", user);
+    await logActivity("success", user);
     set((s) => ({
       auth: { user, isAuthenticated: true, step: "authenticated" },
       users: s.users.map((u) =>
@@ -109,16 +177,17 @@ export const useStore = create<MockStore>((set, get) => ({
     };
 
     if (!user) {
-      logActivity("failed", undefined, "Session expired");
+      await logActivity("failed", undefined, "Session expired");
       return { success: false, error: "Session expired. Please try again." };
     }
     if (code !== "123456") {
-      logActivity("failed", user, "Invalid 2FA code");
+      await logActivity("failed", user, "Invalid 2FA code");
       return { success: false, error: "Invalid authentication code. Please try again." };
     }
     // Log successful 2FA
-    logActivity("success", user);
+    await logActivity("success", user);
     set((s) => ({
+
       auth: { user, isAuthenticated: true, step: "authenticated", pendingUserId: undefined },
       users: s.users.map((u) =>
         u.id === user.id ? { ...u, lastLogin: new Date().toISOString() } : u
