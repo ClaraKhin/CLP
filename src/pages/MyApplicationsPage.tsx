@@ -9,8 +9,6 @@ import {
   HStack,
   SimpleGrid,
   Badge,
-  Flex,
-  Icon,
 } from "@chakra-ui/react";
 import { useStore } from "@/store/store";
 import {
@@ -32,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { createListCollection } from "@chakra-ui/react";
 import { toaster } from "@/components/ui/toaster";
+import IconRenderer from "@/components/IconRenderer";
 
 export default function MyApplicationsPage() {
   const { auth, applications, toggleFavorite, launchApp } = useStore();
@@ -135,7 +134,7 @@ export default function MyApplicationsPage() {
         position="relative"
       >
         <HStack justifyContent="space-between" mb="3">
-          <Box fontSize="2xl">{app.icon}</Box>
+          <Box fontSize="2xl"><IconRenderer iconName={app.icon} size={32} /></Box>
           <HStack gap="1">
             <Button
               variant="ghost"
@@ -194,7 +193,7 @@ export default function MyApplicationsPage() {
         _hover={{ shadow: "sm", borderColor: "blue.300" }}
         transition="all 0.15s"
       >
-        <Box fontSize="2xl" flexShrink="0">{app.icon}</Box>
+        <Box fontSize="2xl" flexShrink="0"><IconRenderer iconName={app.icon} size={32} /></Box>
         <VStack gap="0" alignItems="start" flex="1" minW="0">
           <Text fontWeight="semibold">{app.name}</Text>
           <Text fontSize="sm" color="fg.muted" truncate w="full">{app.description}</Text>

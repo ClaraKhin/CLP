@@ -9,12 +9,12 @@ import {
   HStack,
   SimpleGrid,
   Badge,
-  Flex,
 } from "@chakra-ui/react";
 import { useStore } from "@/store/store";
 import { LuSearch, LuExternalLink, LuStar, LuClock, LuGrid3X3 } from "react-icons/lu";
 import { formatDistanceToNow } from "date-fns";
 import { toaster } from "@/components/ui/toaster";
+import IconRenderer from "@/components/IconRenderer";
 
 export default function AppLauncherPage() {
   const { auth, applications, toggleFavorite, launchApp } = useStore();
@@ -115,7 +115,7 @@ export default function AppLauncherPage() {
           <LuStar size={14} fill={isFav ? "currentColor" : "none"} />
         </Button>
 
-        <Box fontSize="3xl" mb="2">{app.icon}</Box>
+        <Box fontSize="3xl" mb="2"><IconRenderer iconName={app.icon} size={36} /></Box>
         <Text fontWeight="semibold" fontSize="sm" mb="1">{app.name}</Text>
         <Text fontSize="xs" color="fg.muted" lineClamp={2} mb="2">{app.description}</Text>
         <Badge
@@ -214,7 +214,7 @@ export default function AppLauncherPage() {
                   _first={{ borderTopWidth: "0" }}
                   gap="3"
                 >
-                  <Box fontSize="xl">{app.icon}</Box>
+                  <Box fontSize="xl"><IconRenderer iconName={app.icon} size={24} /></Box>
                   <VStack gap="0" alignItems="start" flex="1">
                     <Text fontWeight="semibold" fontSize="sm">{app.name}</Text>
                     <Text fontSize="xs" color="fg.muted">{app.category}</Text>
@@ -250,7 +250,7 @@ export default function AppLauncherPage() {
                 onClick={() => handleLaunch(app.id, app.url, app.name)}
                 textAlign="center"
               >
-                <Box fontSize="xl" mb="1">{app.icon}</Box>
+                <Box fontSize="xl" mb="1"><IconRenderer iconName={app.icon} size={24} /></Box>
                 <Text fontSize="xs" fontWeight="semibold" truncate>{app.name}</Text>
                 <Text fontSize="2xs" color="fg.subtle" mt="0.5">
                   {formatDistanceToNow(new Date(app.lastAccessed!), { addSuffix: true })}

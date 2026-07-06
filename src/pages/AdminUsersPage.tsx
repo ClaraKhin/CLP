@@ -8,10 +8,10 @@ import {
   VStack,
   HStack,
   Badge,
-  Checkbox,
   SimpleGrid,
 } from "@chakra-ui/react";
 import { Field } from "@/components/ui/field";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Avatar } from "@/components/ui/avatar";
 import {
