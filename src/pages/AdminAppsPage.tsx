@@ -10,9 +10,9 @@ import {
   Badge,
   SimpleGrid,
   Textarea,
-  Checkbox,
 } from "@chakra-ui/react";
 import { Field } from "@/components/ui/field";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DialogRoot, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, DialogCloseTrigger,
 } from "@/components/ui/dialog";
@@ -22,6 +22,7 @@ import {
 import { createListCollection } from "@chakra-ui/react";
 import { ClipboardRoot, ClipboardButton, ClipboardInput } from "@/components/ui/clipboard";
 import { toaster } from "@/components/ui/toaster";
+import IconRenderer from "@/components/IconRenderer";
 import { useStore } from "@/store/store";
 import type { Application, UserRole } from "@/store/types";
 import { LuPlus, LuPencil, LuTrash2, LuRefreshCw, LuSearch, LuExternalLink } from "react-icons/lu";
@@ -200,7 +201,7 @@ export default function AdminAppsPage() {
             <Box key={app.id} bg="bg.panel" borderRadius="xl" borderWidth="1px" borderColor="border" p="5" _hover={{ shadow: "sm" }} transition="shadow 0.15s">
               <HStack gap="4" flexWrap="wrap" justifyContent="space-between" mb="4">
                 <HStack gap="3">
-                  <Box fontSize="2xl">{app.icon}</Box>
+                  <Box fontSize="2xl"><IconRenderer iconName={app.icon} size={32} /></Box>
                   <VStack gap="0.5" alignItems="start">
                     <HStack gap="2">
                       <Text fontWeight="bold">{app.name}</Text>

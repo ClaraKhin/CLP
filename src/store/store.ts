@@ -13,6 +13,72 @@ import {
 const generateId = () => Math.random().toString(36).slice(2, 11);
 const generateSecret = () => "sk_live_" + Math.random().toString(36).slice(2, 26);
 
+type ActivityDetails = {
+  ip: string;
+  location: string;
+  device: string;
+  browser: string;
+};
+
+let cachedActivityDetails: Promise<ActivityDetails> | null = null;
+
+const parseDeviceAndBrowser = (userAgent: string): { device: string; browser: string } => {
+  const ua = userAgent.toLowerCase();
+  const device = /tablet|ipad|playbook|silk/.test(ua)
+    ? "Tablet"
+    : /mobi|iphone|android/.test(ua)
+    ? "Mobile"
+    : "Desktop";
+
+  let browser = "Unknown";
+  if (/edg\//.test(ua)) browser = "Edge";
+  else if (/opr\//.test(ua) || /opera/.test(ua)) browser = "Opera";
+  else if (/chrome\//.test(ua) && !/edg\//.test(ua) && !/opr\//.test(ua)) browser = "Chrome";
+  else if (/firefox\//.test(ua)) browser = "Firefox";
+  else if (/safari\//.test(ua) && !/chrome\//.test(ua)) browser = "Safari";
+  else if (/msie|trident/.test(ua)) browser = "Internet Explorer";
+
+  return { device, browser };
+};
+
+const fetchClientActivityDetails = async (): Promise<ActivityDetails> => {
+  if (cachedActivityDetails) return cachedActivityDetails;
+
+  cachedActivityDetails = (async () => {
+    const defaultDetails: ActivityDetails = {
+      ip: "Unknown IP",
+      location: "Unknown Location",
+      device: "Desktop",
+      browser: "Unknown",
+    };
+
+    if (typeof window === "undefined") {
+      return defaultDetails;
+    }
+
+    const userAgent = window.navigator.userAgent || "";
+    const parsed = parseDeviceAndBrowser(userAgent);
+    const details = { ...defaultDetails, ...parsed };
+
+    try {
+      const response = await fetch("https://ipapi.co/json/");
+      if (response.ok) {
+        const data = await response.json();
+        details.ip = data.ip || details.ip;
+        details.location = [data.city, data.region, data.country_name]
+          .filter(Boolean)
+          .join(", ") || data.country_name || details.location;
+      }
+    } catch {
+      // ignore failures and return defaults
+    }
+
+    return details;
+  })();
+
+  return cachedActivityDetails;
+};
+
 export const useStore = create<MockStore>((set, get) => ({
   users: initialUsers,
   roles: initialRoles,
@@ -37,69 +103,95 @@ export const useStore = create<MockStore>((set, get) => ({
     const user = users.find(
       (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password
     );
+
+    // Helper function to log activity with real client details
+    const logActivity = async (status: "success" | "failed" | "blocked", userData?: typeof user, reason?: string) => {
+      const activityDetails = await fetchClientActivityDetails();
+      const activityEntry = {
+        id: generateId(),
+        userId: userData?.id || "",
+        userEmail: email,
+        userName: userData ? `${userData.firstName} ${userData.lastName}` : email,
+        status,
+        ip: activityDetails.ip,
+        location: activityDetails.location,
+        device: activityDetails.device,
+        browser: activityDetails.browser,
+        applicationName: "SSO Portal",
+        timestamp: new Date().toISOString(),
+        failureReason: reason,
+      };
+      set((s) => ({ loginActivity: [activityEntry, ...s.loginActivity] }));
+    };
+
     if (!user) {
+      void logActivity("failed", undefined, "Invalid email or password");
       return { success: false, error: "Invalid email or password. Please try again." };
     }
     if (user.status === "inactive") {
+      void logActivity("failed", user, "Account inactive");
       return { success: false, error: "Your account is inactive. Please contact support." };
     }
     if (user.status === "suspended") {
+      void logActivity("blocked", user, "Account suspended");
       return { success: false, error: "Your account has been suspended. Please contact support." };
     }
     if (user.twoFactorEnabled) {
+      void logActivity("success", user);
       set((s) => ({ auth: { ...s.auth, step: "2fa", pendingUserId: user.id } }));
       return { success: true, requires2FA: true };
     }
-    // Log activity
-    const activityEntry = {
-      id: generateId(),
-      userId: user.id,
-      userEmail: user.email,
-      userName: `${user.firstName} ${user.lastName}`,
-      status: "success" as const,
-      ip: "192.168.1." + Math.floor(Math.random() * 254 + 1),
-      location: "Current Location",
-      device: "Desktop",
-      browser: "Chrome",
-      timestamp: new Date().toISOString(),
-    };
+    // Log activity and authenticate
+    void logActivity("success", user);
     set((s) => ({
       auth: { user, isAuthenticated: true, step: "authenticated" },
       users: s.users.map((u) =>
         u.id === user.id ? { ...u, lastLogin: new Date().toISOString() } : u
       ),
-      loginActivity: [activityEntry, ...s.loginActivity],
     }));
     return { success: true };
   },
 
   verify2FA: async (code) => {
     await new Promise((r) => setTimeout(r, 600));
-    if (code !== "123456") {
-      return { success: false, error: "Invalid authentication code. Please try again." };
-    }
     const { pendingUserId } = get().auth;
     const users = get().users;
     const user = users.find((u) => u.id === pendingUserId);
-    if (!user) return { success: false, error: "Session expired. Please try again." };
-    const activityEntry = {
-      id: generateId(),
-      userId: user.id,
-      userEmail: user.email,
-      userName: `${user.firstName} ${user.lastName}`,
-      status: "success" as const,
-      ip: "192.168.1." + Math.floor(Math.random() * 254 + 1),
-      location: "Current Location",
-      device: "Desktop",
-      browser: "Chrome",
-      timestamp: new Date().toISOString(),
+    
+    // Helper function to log activity
+    const logActivity = (status: "success" | "failed", userData?: typeof user, reason?: string) => {
+      const activityEntry = {
+        id: generateId(),
+        userId: userData?.id || "",
+        userEmail: userData?.email || "",
+        userName: userData ? `${userData.firstName} ${userData.lastName}` : "Unknown",
+        status,
+        ip: "192.168.1." + Math.floor(Math.random() * 254 + 1),
+        location: "Current Location",
+        device: "Desktop",
+        browser: "Chrome",
+        timestamp: new Date().toISOString(),
+        failureReason: reason,
+      };
+      set((s) => ({ loginActivity: [activityEntry, ...s.loginActivity] }));
     };
+
+    if (!user) {
+      void logActivity("failed", undefined, "Session expired");
+      return { success: false, error: "Session expired. Please try again." };
+    }
+    if (code !== "123456") {
+      void logActivity("failed", user, "Invalid 2FA code");
+      return { success: false, error: "Invalid authentication code. Please try again." };
+    }
+    // Log successful 2FA
+    void logActivity("success", user);
     set((s) => ({
+
       auth: { user, isAuthenticated: true, step: "authenticated", pendingUserId: undefined },
       users: s.users.map((u) =>
         u.id === user.id ? { ...u, lastLogin: new Date().toISOString() } : u
       ),
-      loginActivity: [activityEntry, ...s.loginActivity],
     }));
     return { success: true };
   },

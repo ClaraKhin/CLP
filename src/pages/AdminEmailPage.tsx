@@ -22,23 +22,8 @@ import type { EmailTemplate } from "@/store/types";
 import { LuPencil, LuEye, LuMail } from "react-icons/lu";
 import { formatDistanceToNow } from "date-fns";
 
-const SAMPLE_VARS: Record<string, string> = {
-  company_name: "Acme Corp",
-  user_name: "John Doe",
-  user_email: "john@acme.com",
-  user_role: "Admin",
-  login_url: "https://sso.acme.com/login",
-  reset_url: "https://sso.acme.com/reset?token=abc123",
-  verification_code: "789012",
-  verify_url: "https://sso.acme.com/verify?token=xyz789",
-  "2fa_code": "123456",
-  login_time: "Dec 15, 2024 at 3:45 PM EST",
-  login_location: "New York, US",
-  login_device: "Chrome on macOS",
-  login_ip: "192.168.1.1",
-  lock_duration: "30",
-  unlock_url: "https://sso.acme.com/unlock?token=unlock123",
-};
+const PREVIEW_VARS: Record<string, string> = {};
+
 
 function interpolate(text: string, vars: Record<string, string>): string {
   return text.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] || `{{${key}}}`);
@@ -235,12 +220,12 @@ export default function AdminEmailPage() {
               <VStack gap="4" alignItems="stretch">
                 <Box p="3" bg="bg.muted" borderRadius="lg">
                   <Text fontSize="xs" color="fg.muted" mb="1">FROM</Text>
-                  <Text fontSize="sm">notifications@acme.com</Text>
+                  <Text fontSize="sm">no-reply@example.com</Text>
                 </Box>
                 <Box p="3" bg="bg.muted" borderRadius="lg">
                   <Text fontSize="xs" color="fg.muted" mb="1">SUBJECT</Text>
                   <Text fontSize="sm" fontWeight="semibold">
-                    {interpolate(previewTemplate.subject, SAMPLE_VARS)}
+                    {interpolate(previewTemplate.subject, PREVIEW_VARS)}
                   </Text>
                 </Box>
                 <Box
@@ -259,12 +244,12 @@ export default function AdminEmailPage() {
                     fontFamily="body"
                     color="fg"
                   >
-                    {interpolate(previewTemplate.body, SAMPLE_VARS)}
+                    {interpolate(previewTemplate.body, PREVIEW_VARS)}
                   </Box>
                 </Box>
                 <Box p="3" bg="blue.50" _dark={{ bg: "blue.950" }} borderRadius="lg">
                   <Text fontSize="xs" color="fg.muted">
-                    Sample data used for preview. In production, variables are replaced with real user and system data.
+                    Preview uses placeholders. Actual values are provided by the runtime when emails are generated.
                   </Text>
                 </Box>
               </VStack>
