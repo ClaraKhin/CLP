@@ -125,24 +125,24 @@ export const useStore = create<MockStore>((set, get) => ({
     };
 
     if (!user) {
-      await logActivity("failed", undefined, "Invalid email or password");
+      void logActivity("failed", undefined, "Invalid email or password");
       return { success: false, error: "Invalid email or password. Please try again." };
     }
     if (user.status === "inactive") {
-      await logActivity("failed", user, "Account inactive");
+      void logActivity("failed", user, "Account inactive");
       return { success: false, error: "Your account is inactive. Please contact support." };
     }
     if (user.status === "suspended") {
-      await logActivity("blocked", user, "Account suspended");
+      void logActivity("blocked", user, "Account suspended");
       return { success: false, error: "Your account has been suspended. Please contact support." };
     }
     if (user.twoFactorEnabled) {
-      await logActivity("success", user);
+      void logActivity("success", user);
       set((s) => ({ auth: { ...s.auth, step: "2fa", pendingUserId: user.id } }));
       return { success: true, requires2FA: true };
     }
     // Log activity and authenticate
-    await logActivity("success", user);
+    void logActivity("success", user);
     set((s) => ({
       auth: { user, isAuthenticated: true, step: "authenticated" },
       users: s.users.map((u) =>
@@ -177,15 +177,15 @@ export const useStore = create<MockStore>((set, get) => ({
     };
 
     if (!user) {
-      await logActivity("failed", undefined, "Session expired");
+      void logActivity("failed", undefined, "Session expired");
       return { success: false, error: "Session expired. Please try again." };
     }
     if (code !== "123456") {
-      await logActivity("failed", user, "Invalid 2FA code");
+      void logActivity("failed", user, "Invalid 2FA code");
       return { success: false, error: "Invalid authentication code. Please try again." };
     }
     // Log successful 2FA
-    await logActivity("success", user);
+    void logActivity("success", user);
     set((s) => ({
 
       auth: { user, isAuthenticated: true, step: "authenticated", pendingUserId: undefined },
