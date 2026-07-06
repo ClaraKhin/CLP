@@ -16,6 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { PasswordInput } from "@/components/ui/password-input";
 import { toaster } from "@/components/ui/toaster";
 import { useStore } from "@/store/store";
+import { signInWithProvider, SocialProviders } from "@/lib/supertokens";
 import {
   LuShield,
   LuLock,
@@ -437,15 +438,11 @@ export default function LoginPage({ onNavigate }: LoginPageProps) {
                         <Box flex="1" h="1px" bg="border" />
                       </HStack>
 
-                      {/* SSO provider buttons */}
+                      {/* SSO provider buttons - SuperTokens ThirdParty */}
                       <HStack gap="3" w="full">
-                        {[
-                          { label: "Google", bg: "white", color: "#4285f4", icon: "G" },
-                          { label: "Microsoft", bg: "white", color: "#0078d4", icon: "M" },
-                          { label: "Okta", bg: "white", color: "#007dc1", icon: "O" },
-                        ].map((p) => (
+                        {SocialProviders.slice(0, 3).map((p) => (
                           <Button
-                            key={p.label}
+                            key={p.id}
                             variant="outline"
                             size="md"
                             flex="1"
@@ -454,12 +451,20 @@ export default function LoginPage({ onNavigate }: LoginPageProps) {
                             borderColor="border"
                             _hover={{ bg: "bg.subtle", borderColor: "purple.300", transform: "translateY(-1px)" }}
                             transition="all 0.2s"
-                            onClick={() => toaster.create({ title: `${p.label} SSO`, description: "SSO provider integration (demo)", type: "info" })}
+                            onClick={async () => {
+                              const result = await signInWithProvider(p.id);
+                              if (!result.ok) {
+                                toaster.create({
+                                  title: `${p.label} SSO`,
+                                  description: "SuperTokens backend not connected — configure API domain in Admin › SSO Configuration.",
+                                  type: "warning",
+                                });
+                              }
+                            }}
                             aria-label={`Sign in with ${p.label}`}
                           >
                             <Box
-                              w="6"
-                              h="6"
+                              w="6" h="6"
                               borderRadius="md"
                               bg={p.color}
                               color="white"
@@ -469,11 +474,26 @@ export default function LoginPage({ onNavigate }: LoginPageProps) {
                               fontSize="sm"
                               fontWeight="bold"
                             >
-                              {p.icon}
+                              {p.letterIcon || p.label[0]}
                             </Box>
                           </Button>
                         ))}
                       </HStack>
+
+                      <Text fontSize="xs" color="fg.subtle" textAlign="center" mt="1">
+                        Powered by{" "}
+                        <Text
+                          as="span"
+                          fontWeight="semibold"
+                          color="purple.500"
+                          cursor="pointer"
+                          _hover={{ textDecoration: "underline" }}
+                          onClick={() => window.open("https://supertokens.com", "_blank", "noopener,noreferrer")}
+                        >
+                          SuperTokens
+                        </Text>
+                        {" "}SSO
+                      </Text>
                     </VStack>
                   </form>
 
