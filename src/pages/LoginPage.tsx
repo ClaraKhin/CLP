@@ -513,8 +513,6 @@ export default function LoginPage({ onNavigate }: LoginPageProps) {
                   <Box mt="4" p="3" bg="purple.50" _dark={{ bg: "purple.950", borderColor: "purple.900" }} borderRadius="lg" borderWidth="1px" borderColor="purple.100">
                     <Text fontSize="xs" color="fg.muted" textAlign="center">
                       <strong>Demo:</strong> admin@example.com / Admin@123 (with 2FA)
-                      <br />
-                      bob@example.com / Admin@123 (no 2FA)
                     </Text>
                   </Box>
                 </>
