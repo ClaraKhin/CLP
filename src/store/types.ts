@@ -61,6 +61,7 @@ export interface User {
   phone?: string;
   department?: string;
   twoFactorEnabled: boolean;
+  totpSecret?: string;
   password: string;
   favoriteApps: string[];
   lastLogin?: string;

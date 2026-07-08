@@ -50,15 +50,6 @@ const emptyForm = {
   department: "",
 };
 
-const roleOptions = createListCollection({
-  items: [
-    { label: "Super Admin", value: "super_admin" },
-    { label: "Admin", value: "admin" },
-    { label: "User", value: "user" },
-    { label: "Viewer", value: "viewer" },
-  ],
-});
-
 const statusOptions = createListCollection({
   items: [
     { label: "All Statuses", value: "all" },
@@ -68,18 +59,31 @@ const statusOptions = createListCollection({
   ],
 });
 
-const roleFilterOptions = createListCollection({
-  items: [
-    { label: "All Roles", value: "all" },
-    { label: "Super Admin", value: "super_admin" },
-    { label: "Admin", value: "admin" },
-    { label: "User", value: "user" },
-    { label: "Viewer", value: "viewer" },
-  ],
-});
-
 export default function AdminUsersPage() {
-  const { users, addUser, updateUser, deleteUser, bulkDeleteUsers, bulkUpdateRole, bulkDeactivateUsers, auth } = useStore();
+  const { users, roles, addUser, updateUser, deleteUser, bulkDeleteUsers, bulkUpdateRole, bulkDeactivateUsers, auth } = useStore();
+
+  const roleOptions = useMemo(() => createListCollection({
+    items: roles.length > 0
+      ? roles.map((r) => ({ label: r.name, value: r.name.toLowerCase().replace(/ /g, "_") }))
+      : [
+          { label: "Super Admin", value: "super_admin" },
+          { label: "Admin", value: "admin" },
+          { label: "User", value: "user" },
+          { label: "Viewer", value: "viewer" },
+        ],
+  }), [roles]);
+
+  const roleFilterOptions = useMemo(() => createListCollection({
+    items: roles.length > 0
+      ? [{ label: "All Roles", value: "all" }, ...roles.map((r) => ({ label: r.name, value: r.name.toLowerCase().replace(/ /g, "_") }))]
+      : [
+          { label: "All Roles", value: "all" },
+          { label: "Super Admin", value: "super_admin" },
+          { label: "Admin", value: "admin" },
+          { label: "User", value: "user" },
+          { label: "Viewer", value: "viewer" },
+        ],
+  }), [roles]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>(["all"]);

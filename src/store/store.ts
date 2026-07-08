@@ -2,6 +2,43 @@ import { create } from "zustand";
 import { supabase, generateId, generateSecret } from "@/lib/supabase";
 import type { User, UserRole, Application, Role, LoginActivity, Session, SSOProvider, EmailTemplate, PermissionMatrix } from "./types";
 
+// TOTP helper functions using otplib
+export const generateTOTPSecret = (): string => {
+  // Generate a random base32 secret (32 characters = 20 bytes)
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let secret = "";
+  const randomValues = new Uint8Array(20);
+  crypto.getRandomValues(randomValues);
+  for (let i = 0; i < 20; i++) {
+    secret += chars[randomValues[i] % chars.length];
+  }
+  return secret;
+};
+
+export const generateTOTPUri = (secret: string, email: string, issuer: string = "SSO Portal"): string => {
+  return `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(email)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
+};
+
+// Verify TOTP code using otplib
+export const verifyTOTPCode = async (secret: string, code: string): Promise<boolean> => {
+  try {
+    const { authenticator } = await import("otplib");
+    return authenticator.verify(code, secret);
+  } catch {
+    return false;
+  }
+};
+
+// Get current TOTP code for display (for testing purposes)
+export const getCurrentTOTPCode = async (secret: string): Promise<string> => {
+  try {
+    const { authenticator } = await import("otplib");
+    return authenticator.generate(secret);
+  } catch {
+    return "";
+  }
+};
+
 // Helper to convert DB user to app user format
 const dbToAppUser = (dbUser: any): User => ({
   id: dbUser.id,
@@ -14,6 +51,7 @@ const dbToAppUser = (dbUser: any): User => ({
   phone: dbUser.phone || "",
   department: dbUser.department || "",
   twoFactorEnabled: dbUser.two_factor_enabled,
+  totpSecret: dbUser.totp_secret,
   password: dbUser.password_hash,
   favoriteApps: dbUser.favorite_apps || [],
   lastLogin: dbUser.last_login,
@@ -226,6 +264,10 @@ export interface MockStore {
   forgotPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
   resetPassword: (email: string, newPassword: string) => Promise<{ success: boolean }>;
   register: (data: Partial<User> & { password: string }) => Promise<{ success: boolean; error?: string }>;
+  setup2FA: () => Promise<{ secret: string; qrUri: string }>;
+  enable2FA: (code: string) => Promise<{ success: boolean; error?: string }>;
+  disable2FA: () => Promise<void>;
+  getCurrentTOTPCode: (secret: string) => Promise<string>;
 
   // User actions
   addUser: (user: Omit<User, "id" | "createdAt" | "updatedAt">) => Promise<void>;
@@ -418,18 +460,37 @@ export const useStore = create<MockStore>((set, get) => ({
     const dbUser = users[0];
     const user = dbToAppUser(dbUser);
 
-    if (code !== "123456") {
-      const activityDetails = await fetchClientActivityDetails();
-      await supabase.from("login_activity").insert({
-        user_id: user.id,
-        user_email: user.email,
-        user_name: `${user.firstName} ${user.lastName}`,
-        status: "failed",
-        failure_reason: "Invalid 2FA code",
-        ...activityDetails,
-      });
-      get().fetchAllData();
-      return { success: false, error: "Invalid authentication code. Please try again." };
+    // Verify TOTP code if user has a secret configured
+    if (user.totpSecret) {
+      const isValid = await verifyTOTPCode(user.totpSecret, code);
+      if (!isValid) {
+        const activityDetails = await fetchClientActivityDetails();
+        await supabase.from("login_activity").insert({
+          user_id: user.id,
+          user_email: user.email,
+          user_name: `${user.firstName} ${user.lastName}`,
+          status: "failed",
+          failure_reason: "Invalid 2FA code",
+          ...activityDetails,
+        });
+        get().fetchAllData();
+        return { success: false, error: "Invalid authentication code. Please try again." };
+      }
+    } else {
+      // Fallback to demo code for users without TOTP secret
+      if (code !== "123456") {
+        const activityDetails = await fetchClientActivityDetails();
+        await supabase.from("login_activity").insert({
+          user_id: user.id,
+          user_email: user.email,
+          user_name: `${user.firstName} ${user.lastName}`,
+          status: "failed",
+          failure_reason: "Invalid 2FA code",
+          ...activityDetails,
+        });
+        get().fetchAllData();
+        return { success: false, error: "Invalid authentication code. Please try again." };
+      }
     }
 
     const activityDetails = await fetchClientActivityDetails();
@@ -449,6 +510,70 @@ export const useStore = create<MockStore>((set, get) => ({
     }));
     get().fetchAllData();
     return { success: true };
+  },
+
+  setup2FA: async () => {
+    const { auth } = get();
+    if (!auth.user) {
+      throw new Error("Not authenticated");
+    }
+
+    const secret = generateTOTPSecret();
+    const qrUri = generateTOTPUri(secret, auth.user.email);
+
+    // Store the secret temporarily (not enabled yet)
+    await supabase.from("users").update({ totp_secret: secret }).eq("id", auth.user.id);
+
+    return { secret, qrUri };
+  },
+
+  enable2FA: async (code) => {
+    const { auth } = get();
+    if (!auth.user) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    // Get the current user's TOTP secret
+    const { data: user } = await supabase.from("users").select("totp_secret").eq("id", auth.user.id).single();
+    if (!user || !user.totp_secret) {
+      return { success: false, error: "2FA not set up. Please scan the QR code first." };
+    }
+
+    // Verify the code
+    const isValid = await verifyTOTPCode(user.totp_secret, code);
+    if (!isValid) {
+      return { success: false, error: "Invalid verification code. Please try again." };
+    }
+
+    // Enable 2FA
+    await supabase.from("users").update({ two_factor_enabled: true }).eq("id", auth.user.id);
+
+    // Update local state
+    const { data: updatedUser } = await supabase.from("users").select("*").eq("id", auth.user.id).single();
+    if (updatedUser) {
+      set((s) => ({ auth: { ...s.auth, user: dbToAppUser(updatedUser) } }));
+    }
+
+    get().fetchAllData();
+    return { success: true };
+  },
+
+  disable2FA: async () => {
+    const { auth } = get();
+    if (!auth.user) return;
+
+    await supabase.from("users").update({
+      two_factor_enabled: false,
+      totp_secret: null,
+    }).eq("id", auth.user.id);
+
+    // Update local state
+    const { data: updatedUser } = await supabase.from("users").select("*").eq("id", auth.user.id).single();
+    if (updatedUser) {
+      set((s) => ({ auth: { ...s.auth, user: dbToAppUser(updatedUser) } }));
+    }
+
+    get().fetchAllData();
   },
 
   logout: () => {
@@ -809,4 +934,8 @@ export const useStore = create<MockStore>((set, get) => ({
   getAppById: (id) => get().applications.find((a) => a.id === id),
   getAppsForUser: (user: User) =>
     get().applications.filter((a) => a.allowedRoles.includes(user.role)),
+
+  getCurrentTOTPCode: async (secret) => {
+    return await getCurrentTOTPCode(secret);
+  },
 }));

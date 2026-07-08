@@ -27,6 +27,7 @@ import {
   LuBell,
   LuCircleCheck,
   LuCircleAlert,
+  LuRefreshCw,
 } from "react-icons/lu";
 import {
   SelectRoot,
@@ -65,9 +66,13 @@ export default function AccountSettingsPage() {
   });
   const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
 
-  // 2FA
-  const [twoFAEnabled, setTwoFAEnabled] = useState(user.twoFactorEnabled);
-  const [twoFAToggling, setTwoFAToggling] = useState(false);
+  // 2FA state
+  const [twoFAStep, setTwoFAStep] = useState<"idle" | "setup" | "verify">("idle");
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
+  const [totpSecret, setTotpSecret] = useState<string>("");
+  const [verifyCode, setVerifyCode] = useState("");
+  const [twoFALoading, setTwoFALoading] = useState(false);
+  const [twoFAError, setTwoFAError] = useState("");
 
   // Preferences (theme fixed to dark)
   const [language, setLanguage] = useState<string[]>([user.language]);
@@ -131,18 +136,63 @@ export default function AccountSettingsPage() {
     toaster.create({ title: "Password changed successfully", type: "success" });
   };
 
-  const handleToggle2FA = async () => {
-    setTwoFAToggling(true);
-    await new Promise((r) => setTimeout(r, 800));
-    const next = !twoFAEnabled;
-    setTwoFAEnabled(next);
-    await updateUser(user.id, { twoFactorEnabled: next });
-    setTwoFAToggling(false);
-    toaster.create({
-      title: next ? "2FA Enabled" : "2FA Disabled",
-      description: next ? "Your account is now more secure" : "2FA has been disabled for your account",
-      type: next ? "success" : "warning",
-    });
+  const handleSetup2FA = async () => {
+    setTwoFALoading(true);
+    setTwoFAError("");
+    try {
+      const store = await import("@/store/store");
+      const result = await store.setup2FA();
+
+      // Generate QR code using a third-party service
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(result.qrUri)}`;
+      setQrCodeUrl(qrUrl);
+      setTotpSecret(result.secret);
+      setTwoFAStep("setup");
+    } catch (err: any) {
+      setTwoFAError(err.message || "Failed to setup 2FA");
+    }
+    setTwoFALoading(false);
+  };
+
+  const handleVerify2FA = async () => {
+    if (!verifyCode || verifyCode.length !== 6) {
+      setTwoFAError("Please enter a 6-digit code");
+      return;
+    }
+
+    setTwoFALoading(true);
+    setTwoFAError("");
+
+    try {
+      const store = await import("@/store/store");
+      const result = await store.enable2FA(verifyCode);
+
+      if (result.success) {
+        toaster.create({ title: "2FA enabled successfully", description: "Your account is now protected with 2FA", type: "success" });
+        setTwoFAStep("idle");
+        setVerifyCode("");
+        setQrCodeUrl("");
+        setTotpSecret("");
+      } else {
+        setTwoFAError(result.error || "Verification failed");
+      }
+    } catch (err: any) {
+      setTwoFAError(err.message || "Verification failed");
+    }
+
+    setTwoFALoading(false);
+  };
+
+  const handleDisable2FA = async () => {
+    setTwoFALoading(true);
+    try {
+      const store = await import("@/store/store");
+      await store.disable2FA();
+      toaster.create({ title: "2FA disabled", description: "Two-factor authentication has been turned off", type: "warning" });
+    } catch (err: any) {
+      toaster.create({ title: "Failed to disable 2FA", type: "error" });
+    }
+    setTwoFALoading(false);
   };
 
   const handlePrefSave = async () => {
@@ -339,54 +389,170 @@ export default function AccountSettingsPage() {
                 <VStack alignItems="start" gap="1">
                   <Heading size="md">Two-Factor Authentication</Heading>
                   <Text fontSize="sm" color="fg.muted">
-                    Add an extra layer of security to your account
+                    Use an authenticator app like Google Authenticator or Authy
                   </Text>
                 </VStack>
-                <Badge colorPalette={twoFAEnabled ? "green" : "orange"} size="lg">
-                  {twoFAEnabled ? "Enabled" : "Disabled"}
+                <Badge colorPalette={user.twoFactorEnabled ? "green" : "orange"} size="lg">
+                  {user.twoFactorEnabled ? "Enabled" : "Disabled"}
                 </Badge>
               </HStack>
 
               <Separator />
 
+              {/* Status Banner */}
               <Box
                 p="4"
-                bg={twoFAEnabled ? "green.950" : "orange.950"}
+                bg={user.twoFactorEnabled ? "green.950" : "orange.950"}
                 borderRadius="lg"
                 w="full"
               >
                 <HStack gap="3">
-                  {twoFAEnabled ? (
+                  {user.twoFactorEnabled ? (
                     <LuCircleCheck size={20} color="var(--chakra-colors-green-400)" />
                   ) : (
                     <LuCircleAlert size={20} color="var(--chakra-colors-orange-400)" />
                   )}
                   <VStack alignItems="start" gap="0.5">
                     <Text fontWeight="semibold" fontSize="sm">
-                      {twoFAEnabled ? "Your account is protected with 2FA" : "Your account is not fully protected"}
+                      {user.twoFactorEnabled ? "Your account is protected with 2FA" : "Your account is not fully protected"}
                     </Text>
                     <Text fontSize="xs" color="fg.muted">
-                      {twoFAEnabled
-                        ? "You will be required to enter a verification code when signing in"
-                        : "Enable 2FA to require a verification code at each sign in"}
+                      {user.twoFactorEnabled
+                        ? "You'll need a code from your authenticator app when signing in"
+                        : "Enable 2FA to add an extra layer of security"}
                     </Text>
                   </VStack>
                 </HStack>
               </Box>
 
-              <Text fontSize="sm" color="fg.muted">
-                When enabled, you'll be asked to enter a 6-digit code from your authenticator app or email on each login.
-                The demo code is <strong>123456</strong>.
-              </Text>
+              {/* Setup Flow */}
+              {user.twoFactorEnabled ? (
+                <VStack gap="4" w="full">
+                  <Text fontSize="sm" color="fg.muted">
+                    Two-factor authentication is currently enabled. You'll need to enter a code from your authenticator app each time you sign in.
+                  </Text>
+                  <Button
+                    colorPalette="red"
+                    variant="outline"
+                    onClick={handleDisable2FA}
+                    loading={twoFALoading}
+                    loadingText="Disabling..."
+                  >
+                    Disable 2FA
+                  </Button>
+                </VStack>
+              ) : twoFAStep === "idle" ? (
+                <VStack gap="4" w="full">
+                  <Text fontSize="sm" color="fg.muted">
+                    Two-factor authentication adds an extra layer of security to your account. You'll need an authenticator app like Google Authenticator or Authy.
+                  </Text>
+                  <Button
+                    colorPalette="green"
+                    onClick={handleSetup2FA}
+                    loading={twoFALoading}
+                    loadingText="Setting up..."
+                  >
+                    Set up 2FA
+                  </Button>
+                </VStack>
+              ) : twoFAStep === "setup" ? (
+                <VStack gap="5" w="full">
+                  <Text fontSize="sm" fontWeight="semibold">Step 1: Scan the QR Code</Text>
+                  <Text fontSize="sm" color="fg.muted">
+                    Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
+                  </Text>
 
-              <Button
-                colorPalette={twoFAEnabled ? "red" : "green"}
-                onClick={handleToggle2FA}
-                loading={twoFAToggling}
-                loadingText={twoFAEnabled ? "Disabling..." : "Enabling..."}
-              >
-                {twoFAEnabled ? "Disable 2FA" : "Enable 2FA"}
-              </Button>
+                  {/* QR Code Display */}
+                  <Box
+                    p="4"
+                    bg="white"
+                    borderRadius="lg"
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                  >
+                    {qrCodeUrl && (
+                      <img src={qrCodeUrl} alt="2FA QR Code" width="200" height="200" />
+                    )}
+                  </Box>
+
+                  {/* Manual entry option */}
+                  <VStack gap="2">
+                    <Text fontSize="xs" color="fg.muted">
+                      Or enter this code manually:
+                    </Text>
+                    <HStack
+                      p="2"
+                      bg="bg.muted"
+                      borderRadius="md"
+                      fontFamily="monospace"
+                      fontSize="sm"
+                      letterSpacing="0.1em"
+                    >
+                      <Text>{totpSecret.match(/.{1,4}/g)?.join(" ")}</Text>
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        onClick={() => {
+                          navigator.clipboard.writeText(totpSecret);
+                          toaster.create({ title: "Copied to clipboard", type: "success" });
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    </HStack>
+                  </VStack>
+
+                  <Button
+                    colorPalette="blue"
+                    onClick={() => setTwoFAStep("verify")}
+                  >
+                    Next: Verify Code
+                  </Button>
+                </VStack>
+              ) : (
+                <VStack gap="5" w="full">
+                  <Text fontSize="sm" fontWeight="semibold">Step 2: Verify the Code</Text>
+                  <Text fontSize="sm" color="fg.muted">
+                    Enter the 6-digit code from your authenticator app to verify setup
+                  </Text>
+
+                  <Field label="Verification Code" invalid={!!twoFAError} errorText={twoFAError} w="full" maxW="xs">
+                    <Input
+                      placeholder="000000"
+                      value={verifyCode}
+                      onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      size="lg"
+                      textAlign="center"
+                      letterSpacing="0.3em"
+                      fontSize="xl"
+                      maxLength={6}
+                    />
+                  </Field>
+
+                  <HStack gap="3">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setTwoFAStep("setup");
+                        setVerifyCode("");
+                        setTwoFAError("");
+                      }}
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      colorPalette="green"
+                      onClick={handleVerify2FA}
+                      loading={twoFALoading}
+                      loadingText="Verifying..."
+                      disabled={verifyCode.length !== 6}
+                    >
+                      Verify & Enable 2FA
+                    </Button>
+                  </HStack>
+                </VStack>
+              )}
             </VStack>
           </Box>
         </Tabs.Content>
@@ -433,7 +599,7 @@ export default function AccountSettingsPage() {
                         <Text fontWeight="semibold" fontSize="sm">{sess.browser} on {sess.os}</Text>
                         {sess.isCurrent && <Badge colorPalette="green" size="xs">Current</Badge>}
                       </HStack>
-                      <Text fontSize="xs" color="fg.muted">{sess.ip} · {sess.location}</Text>
+                      <Text fontSize="xs" color="fg.muted">{sess.ip} - {sess.location}</Text>
                       <Text fontSize="xs" color="fg.subtle">
                         Last active {formatDistanceToNow(new Date(sess.lastActive), { addSuffix: true })}
                       </Text>
