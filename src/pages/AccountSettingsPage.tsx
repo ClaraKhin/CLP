@@ -27,7 +27,6 @@ import {
   LuBell,
   LuCircleCheck,
   LuCircleAlert,
-  LuRefreshCw,
 } from "react-icons/lu";
 import {
   SelectRoot,
@@ -40,7 +39,7 @@ import { createListCollection } from "@chakra-ui/react";
 import { formatDistanceToNow } from "date-fns";
 
 export default function AccountSettingsPage() {
-  const { auth, updateUser, sessions, terminateSession, terminateAllOtherSessions } = useStore();
+  const { auth, updateUser, sessions, terminateSession, terminateAllOtherSessions, setup2FA, enable2FA, disable2FA } = useStore();
   const user = auth.user!;
 
   const [activeTab, setActiveTab] = useState("profile");
@@ -140,10 +139,7 @@ export default function AccountSettingsPage() {
     setTwoFALoading(true);
     setTwoFAError("");
     try {
-      const store = await import("@/store/store");
-      const result = await store.setup2FA();
-
-      // Generate QR code using a third-party service
+      const result = await setup2FA();
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(result.qrUri)}`;
       setQrCodeUrl(qrUrl);
       setTotpSecret(result.secret);
@@ -163,21 +159,15 @@ export default function AccountSettingsPage() {
     setTwoFALoading(true);
     setTwoFAError("");
 
-    try {
-      const store = await import("@/store/store");
-      const result = await store.enable2FA(verifyCode);
-
-      if (result.success) {
-        toaster.create({ title: "2FA enabled successfully", description: "Your account is now protected with 2FA", type: "success" });
-        setTwoFAStep("idle");
-        setVerifyCode("");
-        setQrCodeUrl("");
-        setTotpSecret("");
-      } else {
-        setTwoFAError(result.error || "Verification failed");
-      }
-    } catch (err: any) {
-      setTwoFAError(err.message || "Verification failed");
+    const result = await enable2FA(verifyCode);
+    if (result.success) {
+      toaster.create({ title: "2FA enabled successfully", description: "Your account is now protected with 2FA", type: "success" });
+      setTwoFAStep("idle");
+      setVerifyCode("");
+      setQrCodeUrl("");
+      setTotpSecret("");
+    } else {
+      setTwoFAError(result.error || "Verification failed");
     }
 
     setTwoFALoading(false);
@@ -185,13 +175,8 @@ export default function AccountSettingsPage() {
 
   const handleDisable2FA = async () => {
     setTwoFALoading(true);
-    try {
-      const store = await import("@/store/store");
-      await store.disable2FA();
-      toaster.create({ title: "2FA disabled", description: "Two-factor authentication has been turned off", type: "warning" });
-    } catch (err: any) {
-      toaster.create({ title: "Failed to disable 2FA", type: "error" });
-    }
+    await disable2FA();
+    toaster.create({ title: "2FA disabled", description: "Two-factor authentication has been turned off", type: "warning" });
     setTwoFALoading(false);
   };
 

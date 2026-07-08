@@ -37,7 +37,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { createListCollection } from "@chakra-ui/react";
-import { generateId } from "@/lib/supabase";
+import { generateId, supabase } from "@/lib/supabase";
 
 const providerTypeCollection = createListCollection({
   items: [
@@ -99,7 +99,6 @@ export default function AdminSSOPage() {
       return;
     }
 
-    const { supabase } = await import("@/lib/supabase");
     const newId = generateId();
 
     await supabase.from("sso_providers").insert({
@@ -126,7 +125,6 @@ export default function AdminSSOPage() {
   const handleDeleteProvider = async () => {
     if (!deleteTarget) return;
 
-    const { supabase } = await import("@/lib/supabase");
     await supabase.from("sso_providers").delete().eq("id", deleteTarget);
 
     setLocalProviders((lp) => {

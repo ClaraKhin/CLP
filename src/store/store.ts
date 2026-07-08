@@ -1,39 +1,29 @@
 import { create } from "zustand";
 import { supabase, generateId, generateSecret } from "@/lib/supabase";
 import type { User, UserRole, Application, Role, LoginActivity, Session, SSOProvider, EmailTemplate, PermissionMatrix } from "./types";
+import { generateSecret as otplibGenerateSecret, generateSync as otplibGenerateSync, verifySync as otplibVerifySync } from "otplib";
 
 // TOTP helper functions using otplib
 export const generateTOTPSecret = (): string => {
-  // Generate a random base32 secret (32 characters = 20 bytes)
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  let secret = "";
-  const randomValues = new Uint8Array(20);
-  crypto.getRandomValues(randomValues);
-  for (let i = 0; i < 20; i++) {
-    secret += chars[randomValues[i] % chars.length];
-  }
-  return secret;
+  return otplibGenerateSecret();
 };
 
 export const generateTOTPUri = (secret: string, email: string, issuer: string = "SSO Portal"): string => {
   return `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(email)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
 };
 
-// Verify TOTP code using otplib
 export const verifyTOTPCode = async (secret: string, code: string): Promise<boolean> => {
   try {
-    const { authenticator } = await import("otplib");
-    return authenticator.verify(code, secret);
+    const result = otplibVerifySync({ token: code, secret });
+    return result.valid;
   } catch {
     return false;
   }
 };
 
-// Get current TOTP code for display (for testing purposes)
 export const getCurrentTOTPCode = async (secret: string): Promise<string> => {
   try {
-    const { authenticator } = await import("otplib");
-    return authenticator.generate(secret);
+    return otplibGenerateSync({ secret });
   } catch {
     return "";
   }
