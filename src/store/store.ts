@@ -1,11 +1,58 @@
 import { create } from "zustand";
 import { supabase, generateId, generateSecret } from "@/lib/supabase";
 import type { User, UserRole, Application, Role, LoginActivity, Session, SSOProvider, EmailTemplate, PermissionMatrix } from "./types";
-import { generateSecret as otplibGenerateSecret, generateSync as otplibGenerateSync, verifySync as otplibVerifySync } from "otplib";
 
-// TOTP helper functions using otplib
+// TOTP implementation using Web Crypto API (no external library needed)
+
+function base32Decode(input: string): Uint8Array {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const str = input.toUpperCase().replace(/=+$/, "");
+  const bytes: number[] = [];
+  let bits = 0;
+  let value = 0;
+  for (let i = 0; i < str.length; i++) {
+    const idx = chars.indexOf(str[i]);
+    if (idx === -1) continue;
+    value = (value << 5) | idx;
+    bits += 5;
+    if (bits >= 8) {
+      bytes.push((value >>> (bits - 8)) & 0xff);
+      bits -= 8;
+    }
+  }
+  return new Uint8Array(bytes);
+}
+
+async function generateTOTPToken(secret: string, counter: number): Promise<string> {
+  const counterBytes = new Uint8Array(8);
+  let c = counter;
+  for (let i = 7; i >= 0; i--) {
+    counterBytes[i] = c & 0xff;
+    c = Math.floor(c / 256);
+  }
+  const key = await crypto.subtle.importKey(
+    "raw",
+    base32Decode(secret),
+    { name: "HMAC", hash: "SHA-1" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, counterBytes);
+  const hash = new Uint8Array(sig);
+  const offset = hash[hash.length - 1] & 0x0f;
+  const code =
+    ((hash[offset] & 0x7f) << 24) |
+    ((hash[offset + 1] & 0xff) << 16) |
+    ((hash[offset + 2] & 0xff) << 8) |
+    (hash[offset + 3] & 0xff);
+  return (code % 1_000_000).toString().padStart(6, "0");
+}
+
 export const generateTOTPSecret = (): string => {
-  return otplibGenerateSecret();
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const bytes = new Uint8Array(20);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map((b) => chars[b % chars.length]).join("");
 };
 
 export const generateTOTPUri = (secret: string, email: string, issuer: string = "SSO Portal"): string => {
@@ -14,8 +61,12 @@ export const generateTOTPUri = (secret: string, email: string, issuer: string = 
 
 export const verifyTOTPCode = async (secret: string, code: string): Promise<boolean> => {
   try {
-    const result = otplibVerifySync({ token: code, secret });
-    return result.valid;
+    const counter = Math.floor(Date.now() / 1000 / 30);
+    for (let delta = -1; delta <= 1; delta++) {
+      const expected = await generateTOTPToken(secret, counter + delta);
+      if (expected === code) return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -23,7 +74,7 @@ export const verifyTOTPCode = async (secret: string, code: string): Promise<bool
 
 export const getCurrentTOTPCode = async (secret: string): Promise<string> => {
   try {
-    return otplibGenerateSync({ secret });
+    return await generateTOTPToken(secret, Math.floor(Date.now() / 1000 / 30));
   } catch {
     return "";
   }
