@@ -7,9 +7,12 @@ import {
 } from "./color-mode"
 
 export function Provider(props: ColorModeProviderProps) {
+  // Force dark mode for the entire application
   return (
-    <ChakraProvider value={defaultSystem}>
-      <ColorModeProvider {...props} />
-    </ChakraProvider>
+    <div className="dark" style={{ height: "100%" }}>
+      <ChakraProvider value={defaultSystem}>
+        <ColorModeProvider forcedTheme="dark" {...props} />
+      </ChakraProvider>
+    </div>
   )
 }

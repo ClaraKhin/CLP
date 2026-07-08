@@ -175,10 +175,10 @@ export default function AdminUsersPage() {
     if (editingUser) {
       const updates: Partial<User> = { firstName: form.firstName, lastName: form.lastName, email: form.email, role, status, phone: form.phone, department: form.department };
       if (form.password) updates.password = form.password;
-      updateUser(editingUser.id, updates);
+      await updateUser(editingUser.id, updates);
       toaster.create({ title: "User updated successfully", type: "success" });
     } else {
-      addUser({ firstName: form.firstName, lastName: form.lastName, email: form.email, password: form.password, role, status, phone: form.phone, department: form.department, twoFactorEnabled: false, favoriteApps: [], sessionCount: 0, notificationsEnabled: true, emailNotifications: true, theme: "light", language: "en", timezone: "America/New_York" });
+      await addUser({ firstName: form.firstName, lastName: form.lastName, email: form.email, password: form.password, role, status, phone: form.phone, department: form.department, twoFactorEnabled: false, favoriteApps: [], sessionCount: 0, notificationsEnabled: true, emailNotifications: true, theme: "dark", language: "en", timezone: "America/New_York" });
       toaster.create({ title: "User created successfully", type: "success" });
     }
     setFormLoading(false);
@@ -188,14 +188,14 @@ export default function AdminUsersPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     await new Promise((r) => setTimeout(r, 500));
-    deleteUser(deleteTarget);
+    await deleteUser(deleteTarget);
     setDeleteTarget(null);
     toaster.create({ title: "User deleted", type: "success" });
   };
 
   const handleBulkDelete = async () => {
     await new Promise((r) => setTimeout(r, 600));
-    bulkDeleteUsers(selected);
+    await bulkDeleteUsers(selected);
     setSelected([]);
     setBulkDeleteOpen(false);
     toaster.create({ title: `${selected.length} users deleted`, type: "success" });
@@ -252,10 +252,10 @@ export default function AdminUsersPage() {
 
       {/* Bulk actions */}
       {selected.length > 0 && (
-        <HStack gap="2" mb="3" p="3" bg="blue.50" _dark={{ bg: "blue.950" }} borderRadius="lg" flexWrap="wrap">
+        <HStack gap="2" mb="3" p="3" bg="blue.950" borderRadius="lg" flexWrap="wrap">
           <Text fontSize="sm" fontWeight="medium">{selected.length} selected</Text>
-          <Button size="xs" colorPalette="orange" variant="outline" onClick={() => { bulkDeactivateUsers(selected); setSelected([]); toaster.create({ title: "Users deactivated", type: "success" }); }}>Deactivate</Button>
-          <Button size="xs" colorPalette="blue" variant="outline" onClick={() => { bulkUpdateRole(selected, "viewer"); setSelected([]); toaster.create({ title: "Roles updated to Viewer", type: "success" }); }}>Set Viewer</Button>
+          <Button size="xs" colorPalette="orange" variant="outline" onClick={async () => { await bulkDeactivateUsers(selected); setSelected([]); toaster.create({ title: "Users deactivated", type: "success" }); }}>Deactivate</Button>
+          <Button size="xs" colorPalette="blue" variant="outline" onClick={async () => { await bulkUpdateRole(selected, "viewer"); setSelected([]); toaster.create({ title: "Roles updated to Viewer", type: "success" }); }}>Set Viewer</Button>
           <Button size="xs" colorPalette="red" variant="outline" onClick={() => setBulkDeleteOpen(true)}>Delete Selected</Button>
           <Button size="xs" variant="ghost" onClick={() => setSelected([])}>Clear</Button>
         </HStack>

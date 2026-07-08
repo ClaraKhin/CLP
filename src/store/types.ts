@@ -157,6 +157,7 @@ export interface MockStore {
   emailTemplates: EmailTemplate[];
   auth: AuthState;
   colorMode: "light" | "dark";
+  loading: boolean;
 
   // Auth actions
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string; requires2FA?: boolean }>;
@@ -207,4 +208,7 @@ export interface MockStore {
   getUserById: (id: string) => User | undefined;
   getAppById: (id: string) => Application | undefined;
   getAppsForUser: (user: User) => Application[];
+
+  // Data fetching
+  fetchAllData: () => Promise<void>;
 }

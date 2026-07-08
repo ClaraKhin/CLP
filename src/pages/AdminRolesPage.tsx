@@ -96,10 +96,10 @@ export default function AdminRolesPage() {
     setLoading(true);
     await new Promise((r) => setTimeout(r, 700));
     if (editingRole) {
-      updateRole(editingRole.id, { name, description, color, permissions: matrix });
+      await updateRole(editingRole.id, { name, description, color, permissions: matrix });
       toaster.create({ title: "Role updated", type: "success" });
     } else {
-      addRole({ name, description, color, permissions: matrix });
+      await addRole({ name, description, color, permissions: matrix });
       toaster.create({ title: "Role created", type: "success" });
     }
     setLoading(false);
@@ -111,7 +111,7 @@ export default function AdminRolesPage() {
     const role = roles.find((r) => r.id === deleteTarget);
     const roleUserCount = roleUserCounts[role?.name?.toLowerCase() || ""] || 0;
     await new Promise((r) => setTimeout(r, 500));
-    deleteRole(deleteTarget);
+    await deleteRole(deleteTarget);
     setDeleteTarget(null);
     toaster.create({ title: "Role deleted", type: "success" });
   };

@@ -12,7 +12,6 @@ import {
   Icon,
 } from "@chakra-ui/react";
 import { Avatar } from "@/components/ui/avatar";
-import { ColorModeButton, useColorMode } from "@/components/ui/color-mode";
 import { useStore } from "@/store/store";
 import {
   LuLayoutDashboard,
@@ -58,7 +57,6 @@ const adminNavItems = [
 
 export default function AppShell({ children, currentPage, onNavigate }: AppShellProps) {
   const { auth, logout } = useStore();
-  const { colorMode } = useColorMode();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const user = auth.user;
   const isAdmin = user?.role === "admin" || user?.role === "super_admin";
@@ -285,7 +283,6 @@ export default function AppShell({ children, currentPage, onNavigate }: AppShell
           </HStack>
 
           <HStack gap="2">
-            <ColorModeButton />
             <Avatar
               size="sm"
               name={user ? `${user.firstName} ${user.lastName}` : "U"}

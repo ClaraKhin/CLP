@@ -12,7 +12,6 @@ import {
   Separator,
   Tabs,
   Switch,
-  Textarea,
 } from "@chakra-ui/react";
 import { Field } from "@/components/ui/field";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -28,8 +27,6 @@ import {
   LuBell,
   LuCircleCheck,
   LuCircleAlert,
-  LuTrash2,
-  LuLogOut,
 } from "react-icons/lu";
 import {
   SelectRoot,
@@ -39,12 +36,10 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { createListCollection } from "@chakra-ui/react";
-import { useColorMode } from "@/components/ui/color-mode";
 import { formatDistanceToNow } from "date-fns";
 
 export default function AccountSettingsPage() {
   const { auth, updateUser, sessions, terminateSession, terminateAllOtherSessions } = useStore();
-  const { colorMode, setColorMode } = useColorMode();
   const user = auth.user!;
 
   const [activeTab, setActiveTab] = useState("profile");
@@ -74,20 +69,11 @@ export default function AccountSettingsPage() {
   const [twoFAEnabled, setTwoFAEnabled] = useState(user.twoFactorEnabled);
   const [twoFAToggling, setTwoFAToggling] = useState(false);
 
-  // Preferences
-  const [theme, setTheme] = useState<string[]>([user.theme]);
+  // Preferences (theme fixed to dark)
   const [language, setLanguage] = useState<string[]>([user.language]);
   const [timezone, setTimezone] = useState<string[]>([user.timezone]);
   const [notifications, setNotifications] = useState(user.notificationsEnabled);
   const [emailNotifications, setEmailNotifications] = useState(user.emailNotifications);
-
-  const themeCollection = createListCollection({
-    items: [
-      { label: "Light", value: "light" },
-      { label: "Dark", value: "dark" },
-      { label: "System", value: "system" },
-    ],
-  });
 
   const languageCollection = createListCollection({
     items: [
@@ -120,8 +106,7 @@ export default function AccountSettingsPage() {
     if (Object.keys(errs).length > 0) return;
 
     setProfileLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    updateUser(user.id, profile);
+    await updateUser(user.id, profile);
     setProfileLoading(false);
     toaster.create({ title: "Profile updated successfully", type: "success" });
   };
@@ -140,8 +125,7 @@ export default function AccountSettingsPage() {
     if (Object.keys(errs).length > 0) return;
 
     setPasswordLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    updateUser(user.id, { password: passwords.newPass });
+    await updateUser(user.id, { password: passwords.newPass });
     setPasswordLoading(false);
     setPasswords({ current: "", newPass: "", confirm: "" });
     toaster.create({ title: "Password changed successfully", type: "success" });
@@ -152,7 +136,7 @@ export default function AccountSettingsPage() {
     await new Promise((r) => setTimeout(r, 800));
     const next = !twoFAEnabled;
     setTwoFAEnabled(next);
-    updateUser(user.id, { twoFactorEnabled: next });
+    await updateUser(user.id, { twoFactorEnabled: next });
     setTwoFAToggling(false);
     toaster.create({
       title: next ? "2FA Enabled" : "2FA Disabled",
@@ -163,21 +147,12 @@ export default function AccountSettingsPage() {
 
   const handlePrefSave = async () => {
     setPrefLoading(true);
-    await new Promise((r) => setTimeout(r, 600));
-    const selectedTheme = theme[0] || "light";
-    updateUser(user.id, {
-      theme: selectedTheme as "light" | "dark" | "system",
+    await updateUser(user.id, {
       language: language[0] || "en",
       timezone: timezone[0] || "America/New_York",
       notificationsEnabled: notifications,
       emailNotifications,
     });
-    // Actually change the color mode
-    if (selectedTheme === "light" || selectedTheme === "dark") {
-      setColorMode(selectedTheme);
-    } else {
-      setColorMode("light");
-    }
     setPrefLoading(false);
     toaster.create({ title: "Preferences saved", type: "success" });
   };
@@ -282,16 +257,8 @@ export default function AccountSettingsPage() {
             <Heading size="md" mb="5">Display Preferences</Heading>
             <VStack gap="5">
               <Field label="Theme" w="full">
-                <SelectRoot collection={themeCollection} value={theme} onValueChange={(d) => setTheme(d.value)} w="full">
-                  <SelectTrigger>
-                    <SelectValueText placeholder="Select theme" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {themeCollection.items.map((item) => (
-                      <SelectItem key={item.value} item={item}>{item.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </SelectRoot>
+                <Input value="Dark" disabled bg="bg.muted" />
+                <Text fontSize="xs" color="fg.muted" mt="1">Theme is fixed to dark mode</Text>
               </Field>
 
               <Field label="Language" w="full">
@@ -384,16 +351,15 @@ export default function AccountSettingsPage() {
 
               <Box
                 p="4"
-                bg={twoFAEnabled ? "green.50" : "orange.50"}
-                _dark={{ bg: twoFAEnabled ? "green.950" : "orange.950" }}
+                bg={twoFAEnabled ? "green.950" : "orange.950"}
                 borderRadius="lg"
                 w="full"
               >
                 <HStack gap="3">
                   {twoFAEnabled ? (
-                    <LuCircleCheck size={20} color="var(--chakra-colors-green-500)" />
+                    <LuCircleCheck size={20} color="var(--chakra-colors-green-400)" />
                   ) : (
-                    <LuCircleAlert size={20} color="var(--chakra-colors-orange-500)" />
+                    <LuCircleAlert size={20} color="var(--chakra-colors-orange-400)" />
                   )}
                   <VStack alignItems="start" gap="0.5">
                     <Text fontWeight="semibold" fontSize="sm">
@@ -434,8 +400,8 @@ export default function AccountSettingsPage() {
                 colorPalette="red"
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  terminateAllOtherSessions();
+                onClick={async () => {
+                  await terminateAllOtherSessions();
                   toaster.create({ title: "All other sessions terminated", type: "success" });
                 }}
                 disabled={userSessions.filter((s) => !s.isCurrent).length === 0}
@@ -459,8 +425,8 @@ export default function AccountSettingsPage() {
                     gap="4"
                     flexWrap="wrap"
                   >
-                    <Box w="10" h="10" bg="blue.50" _dark={{ bg: "blue.950" }} borderRadius="lg" display="flex" alignItems="center" justifyContent="center" flexShrink="0">
-                      <LuMonitor size={18} color="var(--chakra-colors-blue-500)" />
+                    <Box w="10" h="10" bg="blue.950" borderRadius="lg" display="flex" alignItems="center" justifyContent="center" flexShrink="0">
+                      <LuMonitor size={18} color="var(--chakra-colors-blue-400)" />
                     </Box>
                     <VStack alignItems="start" gap="0.5" flex="1" minW="0">
                       <HStack gap="2">
@@ -477,8 +443,8 @@ export default function AccountSettingsPage() {
                         colorPalette="red"
                         variant="outline"
                         size="xs"
-                        onClick={() => {
-                          terminateSession(sess.id);
+                        onClick={async () => {
+                          await terminateSession(sess.id);
                           toaster.create({ title: "Session terminated", type: "success" });
                         }}
                       >
@@ -542,8 +508,7 @@ export default function AccountSettingsPage() {
                   colorPalette="blue"
                   onClick={async () => {
                     setPrefLoading(true);
-                    await new Promise((r) => setTimeout(r, 600));
-                    updateUser(user.id, { notificationsEnabled: notifications, emailNotifications });
+                    await updateUser(user.id, { notificationsEnabled: notifications, emailNotifications });
                     setPrefLoading(false);
                     toaster.create({ title: "Notification preferences saved", type: "success" });
                   }}

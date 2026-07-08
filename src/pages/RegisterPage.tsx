@@ -15,7 +15,7 @@ import { Field } from "@/components/ui/field";
 import { PasswordInput } from "@/components/ui/password-input";
 import { toaster } from "@/components/ui/toaster";
 import { useStore } from "@/store/store";
-import { LuShield, LuCircleCheck } from "react-icons/lu";
+import { LuCircleCheck } from "react-icons/lu";
 
 interface RegisterPageProps {
   onNavigate: (page: string) => void;
@@ -110,10 +110,10 @@ export default function RegisterPage({ onNavigate }: RegisterPageProps) {
 
   if (registered) {
     return (
-      <Flex minH="100vh" bg="bg.subtle" alignItems="center" justifyContent="center" p="8">
+      <Flex minH="100vh" bg="gray.950" alignItems="center" justifyContent="center" p="8">
         <Box maxW="sm" w="full" textAlign="center">
-          <Box w="20" h="20" bg="green.50" _dark={{ bg: "green.950" }} borderRadius="full" display="flex" alignItems="center" justifyContent="center" mx="auto" mb="6">
-            <LuCircleCheck size={40} color="#10b981" />
+          <Box w="20" h="20" bg="green.950" borderRadius="full" display="flex" alignItems="center" justifyContent="center" mx="auto" mb="6">
+            <LuCircleCheck size={40} color="#4ade80" />
           </Box>
           <Heading size="xl" mb="3">Registration Complete!</Heading>
           <Text color="fg.muted" mb="8">Your account has been verified. You can now sign in with your credentials.</Text>
@@ -126,16 +126,13 @@ export default function RegisterPage({ onNavigate }: RegisterPageProps) {
   }
 
   return (
-    <Flex minH="100vh" bg="bg.subtle" alignItems="center" justifyContent="center" p="8">
+    <Flex minH="100vh" bg="gray.950" alignItems="center" justifyContent="center" p="8">
       <Box w="full" maxW="lg">
         {/* Header */}
         <VStack gap="2" mb="8" textAlign="center">
-          <HStack gap="2" justifyContent="center" mb="2">
-            <Box w="10" h="10" bg="blue.500" borderRadius="xl" display="flex" alignItems="center" justifyContent="center">
-              <LuShield size={20} color="white" />
-            </Box>
-            <Heading size="lg" fontWeight="bold">Central SSO Portal</Heading>
-          </HStack>
+          <Box w="10" h="10" bg="blue.500" borderRadius="xl" display="flex" alignItems="center" justifyContent="center">
+            <Text fontSize="lg" fontWeight="bold" color="white">SSO</Text>
+          </Box>
           <Heading size="xl" fontWeight="bold">Create your account</Heading>
           <Text color="fg.muted">Join your organization's SSO portal</Text>
         </VStack>
@@ -246,7 +243,7 @@ export default function RegisterPage({ onNavigate }: RegisterPageProps) {
           ) : (
             <form onSubmit={handleVerify}>
               <VStack gap="5" textAlign="center">
-                <Box w="16" h="16" bg="blue.50" _dark={{ bg: "blue.950" }} borderRadius="2xl" display="flex" alignItems="center" justifyContent="center" mx="auto">
+                <Box w="16" h="16" bg="blue.950" borderRadius="2xl" display="flex" alignItems="center" justifyContent="center" mx="auto">
                   <Text fontSize="3xl">📧</Text>
                 </Box>
                 <VStack gap="1">

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "@/store/store";
-import { useColorMode } from "@/components/ui/color-mode";
 import { Toaster } from "@/components/ui/toaster";
+import { Box, Spinner, VStack, Text } from "@chakra-ui/react";
 import AppShell from "@/components/AppShell";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
@@ -35,14 +35,13 @@ type Page =
   | "admin-email";
 
 function AppContent() {
-  const { auth, colorMode } = useStore();
-  const { setColorMode } = useColorMode();
+  const { auth, loading, fetchAllData } = useStore();
   const [page, setPage] = useState<Page>("login");
 
-  // Sync color mode from store
+  // Fetch all data on mount
   useEffect(() => {
-    setColorMode(colorMode);
-  }, [colorMode]);
+    fetchAllData();
+  }, [fetchAllData]);
 
   // Redirect to dashboard when authenticated
   useEffect(() => {
@@ -52,11 +51,23 @@ function AppContent() {
     if (!auth.isAuthenticated && page !== "login" && page !== "register" && page !== "forgot-password") {
       setPage("login");
     }
-  }, [auth.isAuthenticated]);
+  }, [auth.isAuthenticated, page]);
 
   const navigate = (target: string) => {
     setPage(target as Page);
   };
+
+  // Show loading spinner while fetching initial data
+  if (loading) {
+    return (
+      <Box minH="100vh" display="flex" alignItems="center" justifyContent="center" bg="gray.950">
+        <VStack gap="4">
+          <Spinner size="lg" color="blue.500" />
+          <Text color="fg.muted">Loading portal...</Text>
+        </VStack>
+      </Box>
+    );
+  }
 
   // Auth pages (no shell)
   if (!auth.isAuthenticated) {
