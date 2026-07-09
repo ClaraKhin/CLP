@@ -64,7 +64,7 @@ export default function AdminUsersPage() {
 
   const roleOptions = useMemo(() => createListCollection({
     items: roles.length > 0
-      ? roles.map((r) => ({ label: r.name, value: r.name.toLowerCase().replace(/ /g, "_") }))
+      ? roles.map((r) => ({ label: r.name, value: r.name }))
       : [
           { label: "Super Admin", value: "super_admin" },
           { label: "Admin", value: "admin" },
@@ -75,7 +75,7 @@ export default function AdminUsersPage() {
 
   const roleFilterOptions = useMemo(() => createListCollection({
     items: roles.length > 0
-      ? [{ label: "All Roles", value: "all" }, ...roles.map((r) => ({ label: r.name, value: r.name.toLowerCase().replace(/ /g, "_") }))]
+      ? [{ label: "All Roles", value: "all" }, ...roles.map((r) => ({ label: r.name, value: r.name }))]
       : [
           { label: "All Roles", value: "all" },
           { label: "Super Admin", value: "super_admin" },

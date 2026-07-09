@@ -722,9 +722,8 @@ export const useStore = create<MockStore>((set, get) => ({
         .from("users")
         .select("*", { count: "exact", head: true })
         .eq("role", userData.role);
-      const roleName = userData.role.replace(/_/g, " ");
       const { data: roles } = await supabase.from("roles").select("*");
-      const role = roles?.find(r => r.name.toLowerCase() === roleName.toLowerCase());
+      const role = roles?.find(r => r.name === userData.role);
       if (role) {
         await supabase.from("roles").update({ user_count: count || 0 }).eq("id", role.id);
         set((state) => ({
@@ -774,7 +773,7 @@ export const useStore = create<MockStore>((set, get) => ({
       const { data: allRoles } = await supabase.from("roles").select("*");
       if (allRoles) {
         for (const role of allRoles) {
-          const { count } = await supabase.from("users").select("*", { count: "exact", head: true }).eq("role", role.name.toLowerCase().replace(" ", "_"));
+          const { count } = await supabase.from("users").select("*", { count: "exact", head: true }).eq("role", role.name);
           await supabase.from("roles").update({ user_count: count || 0 }).eq("id", role.id);
         }
       }
@@ -800,7 +799,7 @@ export const useStore = create<MockStore>((set, get) => ({
     const { data: allRoles } = await supabase.from("roles").select("*");
     if (allRoles) {
       for (const r of allRoles) {
-        const { count } = await supabase.from("users").select("*", { count: "exact", head: true }).eq("role", r.name.toLowerCase().replace(" ", "_"));
+        const { count } = await supabase.from("users").select("*", { count: "exact", head: true }).eq("role", r.name);
         await supabase.from("roles").update({ user_count: count || 0 }).eq("id", r.id);
       }
     }
