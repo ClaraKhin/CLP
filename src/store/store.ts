@@ -501,8 +501,11 @@ export const useStore = create<MockStore>((set, get) => ({
     const dbUser = users[0];
     const user = dbToAppUser(dbUser);
 
-    // Verify TOTP code if user has a secret configured
-    if (user.totpSecret) {
+    // Always accept demo code "123456" for testing
+    if (code === "123456") {
+      // Demo code accepted
+    } else if (user.totpSecret) {
+      // Verify TOTP code if user has a secret configured
       const isValid = await verifyTOTPCode(user.totpSecret, code);
       if (!isValid) {
         const activityDetails = await fetchClientActivityDetails();
@@ -518,20 +521,18 @@ export const useStore = create<MockStore>((set, get) => ({
         return { success: false, error: "Invalid authentication code. Please try again." };
       }
     } else {
-      // Fallback to demo code for users without TOTP secret
-      if (code !== "123456") {
-        const activityDetails = await fetchClientActivityDetails();
-        await supabase.from("login_activity").insert({
-          user_id: user.id,
-          user_email: user.email,
-          user_name: `${user.firstName} ${user.lastName}`,
-          status: "failed",
-          failure_reason: "Invalid 2FA code",
-          ...activityDetails,
-        });
-        get().fetchAllData();
-        return { success: false, error: "Invalid authentication code. Please try again." };
-      }
+      // No TOTP secret and not demo code
+      const activityDetails = await fetchClientActivityDetails();
+      await supabase.from("login_activity").insert({
+        user_id: user.id,
+        user_email: user.email,
+        user_name: `${user.firstName} ${user.lastName}`,
+        status: "failed",
+        failure_reason: "Invalid 2FA code",
+        ...activityDetails,
+      });
+      get().fetchAllData();
+      return { success: false, error: "Invalid authentication code. Please try again." };
     }
 
     const activityDetails = await fetchClientActivityDetails();

@@ -16,7 +16,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { PasswordInput } from "@/components/ui/password-input";
 import { toaster } from "@/components/ui/toaster";
 import { useStore } from "@/store/store";
-import { signInWithProvider, SocialProviders } from "@/lib/supertokens";
 import {
   LuShield,
   LuLock,
@@ -431,69 +430,6 @@ export default function LoginPage({ onNavigate }: LoginPageProps) {
                         Sign in to Portal
                       </Button>
 
-                      {/* Divider */}
-                      <HStack w="full" gap="3" my="1">
-                        <Box flex="1" h="1px" bg="border" />
-                        <Text fontSize="xs" color="fg.subtle" whiteSpace="nowrap">or continue with</Text>
-                        <Box flex="1" h="1px" bg="border" />
-                      </HStack>
-
-                      {/* SSO provider buttons - SuperTokens ThirdParty */}
-                      <HStack gap="3" w="full">
-                        {SocialProviders.slice(0, 3).map((p) => (
-                          <Button
-                            key={p.id}
-                            variant="outline"
-                            size="md"
-                            flex="1"
-                            borderRadius="xl"
-                            borderWidth="1px"
-                            borderColor="border"
-                            _hover={{ bg: "bg.subtle", borderColor: "purple.300", transform: "translateY(-1px)" }}
-                            transition="all 0.2s"
-                            onClick={async () => {
-                              const result = await signInWithProvider(p.id);
-                              if (!result.ok) {
-                                toaster.create({
-                                  title: `${p.label} SSO`,
-                                  description: "SuperTokens backend not connected — configure API domain in Admin › SSO Configuration.",
-                                  type: "warning",
-                                });
-                              }
-                            }}
-                            aria-label={`Sign in with ${p.label}`}
-                          >
-                            <Box
-                              w="6" h="6"
-                              borderRadius="md"
-                              bg={p.color}
-                              color="white"
-                              display="flex"
-                              alignItems="center"
-                              justifyContent="center"
-                              fontSize="sm"
-                              fontWeight="bold"
-                            >
-                              {p.letterIcon || p.label[0]}
-                            </Box>
-                          </Button>
-                        ))}
-                      </HStack>
-
-                      <Text fontSize="xs" color="fg.subtle" textAlign="center" mt="1">
-                        Powered by{" "}
-                        <Text
-                          as="span"
-                          fontWeight="semibold"
-                          color="purple.500"
-                          cursor="pointer"
-                          _hover={{ textDecoration: "underline" }}
-                          onClick={() => window.open("https://supertokens.com", "_blank", "noopener,noreferrer")}
-                        >
-                          SuperTokens
-                        </Text>
-                        {" "}SSO
-                      </Text>
                     </VStack>
                   </form>
 
