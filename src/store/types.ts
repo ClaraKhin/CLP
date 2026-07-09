@@ -1,4 +1,8 @@
 export type UserRole = string;
+
+// Normalizes a role value for comparison (e.g. "Super Admin" -> "super_admin")
+export const normalizeRole = (role: string): string =>
+  role.toLowerCase().replace(/ /g, "_");
 export type UserStatus = "active" | "inactive" | "suspended";
 export type AppStatus = "active" | "inactive" | "maintenance";
 export type LoginStatus = "success" | "failed" | "blocked";

@@ -12,6 +12,13 @@ Changes:
 
 BEGIN;
 
+-- Drop enum-based defaults first so the type can be dropped
+ALTER TABLE users
+  ALTER COLUMN role DROP DEFAULT;
+
+ALTER TABLE applications
+  ALTER COLUMN allowed_roles DROP DEFAULT;
+
 -- Convert user role from enum to plain text so any created role can be stored
 ALTER TABLE users
   ALTER COLUMN role TYPE text USING role::text;
@@ -19,6 +26,13 @@ ALTER TABLE users
 -- Convert application allowed roles from enum array to text array
 ALTER TABLE applications
   ALTER COLUMN allowed_roles TYPE text[] USING allowed_roles::text[];
+
+-- Restore defaults as plain text values
+ALTER TABLE users
+  ALTER COLUMN role SET DEFAULT 'user';
+
+ALTER TABLE applications
+  ALTER COLUMN allowed_roles SET DEFAULT '{}';
 
 -- Drop the enum now that nothing references it
 DROP TYPE IF EXISTS user_role;

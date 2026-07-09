@@ -34,6 +34,7 @@ import { createListCollection } from "@chakra-ui/react";
 import { toaster } from "@/components/ui/toaster";
 import { useStore } from "@/store/store";
 import type { User, UserRole, UserStatus } from "@/store/types";
+import { normalizeRole } from "@/store/types";
 import { LuSearch, LuPlus, LuPencil, LuTrash2, LuChevronUp, LuChevronDown } from "react-icons/lu";
 import { formatDistanceToNow } from "date-fns";
 
@@ -217,7 +218,12 @@ export default function AdminUsersPage() {
     sort.key === k ? (sort.dir === "asc" ? <LuChevronUp size={14} /> : <LuChevronDown size={14} />) : null;
 
   const statusColor = (s: string) => s === "active" ? "green" : s === "inactive" ? "gray" : "red";
-  const roleColor = (r: string) => r === "super_admin" ? "purple" : r === "admin" ? "blue" : r === "viewer" ? "orange" : "gray";
+  const roleColor = (r: string) => {
+    const custom = roles.find((role) => role.name === r);
+    if (custom) return custom.color;
+    const n = normalizeRole(r);
+    return n === "super_admin" ? "purple" : n === "admin" ? "blue" : n === "viewer" ? "orange" : "gray";
+  };
 
   return (
     <Box p={{ base: "4", md: "6", lg: "8" }} maxW="1400px" mx="auto">
@@ -315,7 +321,7 @@ export default function AdminUsersPage() {
                   </td>
                   <td style={{ padding: "12px 16px", fontSize: "14px" }}>{u.email}</td>
                   <td style={{ padding: "12px 16px" }}>
-                    <Badge colorPalette={roleColor(u.role)} size="sm">{u.role.replace("_", " ")}</Badge>
+                    <Badge colorPalette={roleColor(u.role)} size="sm">{u.role.replace(/_/g, " ")}</Badge>
                   </td>
                   <td style={{ padding: "12px 16px" }}>
                     <Badge colorPalette={statusColor(u.status)} size="sm">{u.status}</Badge>
