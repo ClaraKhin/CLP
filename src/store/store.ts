@@ -104,6 +104,8 @@ const dbToAppUser = (dbUser: any): User => ({
   theme: dbUser.theme,
   language: dbUser.language,
   timezone: dbUser.timezone,
+  isOnline: dbUser.is_online ?? false,
+  lastSeenAt: dbUser.last_seen_at,
 });
 
 // Helper to convert app user to DB format
@@ -224,9 +226,11 @@ type ActivityDetails = {
   browser: string;
 };
 
-let cachedActivityDetails: Promise<ActivityDetails> | null = null;
+let cachedActivityDetails: ActivityDetails | null = null;
+let cacheTimestamp = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-const parseDeviceAndBrowser = (userAgent: string): { device: string; browser: string } => {
+const parseDeviceAndBrowser = (userAgent: string): { device: string; browser: string; os: string } => {
   const ua = userAgent.toLowerCase();
   const device = /tablet|ipad|playbook|silk/.test(ua)
     ? "Tablet"
@@ -242,43 +246,87 @@ const parseDeviceAndBrowser = (userAgent: string): { device: string; browser: st
   else if (/safari\//.test(ua) && !/chrome\//.test(ua)) browser = "Safari";
   else if (/msie|trident/.test(ua)) browser = "Internet Explorer";
 
-  return { device, browser };
+  let os = "Unknown";
+  if (/windows nt 10/.test(ua)) os = "Windows 10";
+  else if (/windows nt 6\.3/.test(ua)) os = "Windows 8.1";
+  else if (/windows nt 6\.2/.test(ua)) os = "Windows 8";
+  else if (/windows nt 6\.1/.test(ua)) os = "Windows 7";
+  else if (/mac os x/.test(ua)) os = "macOS";
+  else if (/android/.test(ua)) os = "Android";
+  else if (/iphone|ipad/.test(ua)) os = "iOS";
+  else if (/linux/.test(ua)) os = "Linux";
+
+  return { device, browser, os };
 };
 
 const fetchClientActivityDetails = async (): Promise<ActivityDetails> => {
-  if (cachedActivityDetails) return cachedActivityDetails;
+  // Return cached result if still valid
+  const now = Date.now();
+  if (cachedActivityDetails && (now - cacheTimestamp) < CACHE_DURATION) {
+    return cachedActivityDetails;
+  }
 
-  cachedActivityDetails = (async () => {
-    const defaultDetails: ActivityDetails = {
-      ip: "Unknown IP",
-      location: "Unknown Location",
-      device: "Desktop",
-      browser: "Unknown",
-    };
+  const defaultDetails: ActivityDetails = {
+    ip: "Unknown IP",
+    location: "Unknown Location",
+    device: "Desktop",
+    browser: "Unknown",
+  };
 
-    if (typeof window === "undefined") return defaultDetails;
+  if (typeof window === "undefined") return defaultDetails;
 
-    const userAgent = window.navigator.userAgent || "";
-    const parsed = parseDeviceAndBrowser(userAgent);
-    const details = { ...defaultDetails, ...parsed };
+  const userAgent = window.navigator.userAgent || "";
+  const parsed = parseDeviceAndBrowser(userAgent);
+  const details: ActivityDetails = { ...defaultDetails, ...parsed };
 
+  // Try multiple IP geolocation APIs with fallbacks
+  const ipApis = [
+    "https://ipapi.co/json/",
+    "https://ipwho.is/",
+    "https://ip-api.com/json/",
+  ];
+
+  for (const apiUrl of ipApis) {
     try {
-      const response = await fetch("https://ipapi.co/json/");
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+      const response = await fetch(apiUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
       if (response.ok) {
         const data = await response.json();
-        details.ip = data.ip || details.ip;
-        details.location = [data.city, data.region, data.country_name]
-          .filter(Boolean)
-          .join(", ") || data.country_name || details.location;
+
+        // Handle different API response formats
+        if (apiUrl.includes("ipapi.co")) {
+          details.ip = data.ip || details.ip;
+          details.location = [data.city, data.region, data.country_name]
+            .filter(Boolean).join(", ") || data.country_name || details.location;
+        } else if (apiUrl.includes("ipwho.is")) {
+          details.ip = data.ip || details.ip;
+          details.location = data.city
+            ? `${data.city}, ${data.region || ""}, ${data.country || ""}`.replace(/, ,/g, ",").replace(/, $/, "")
+            : data.country || details.location;
+        } else if (apiUrl.includes("ip-api.com")) {
+          details.ip = data.query || details.ip;
+          details.location = [data.city, data.regionName, data.country]
+            .filter(Boolean).join(", ") || details.location;
+        }
+
+        // Success - cache and return
+        cachedActivityDetails = details;
+        cacheTimestamp = now;
+        return details;
       }
     } catch {
-      // ignore failures
+      // Continue to next API
     }
+  }
 
-    return details;
-  })();
-
-  return cachedActivityDetails;
+  // All APIs failed - cache default
+  cachedActivityDetails = details;
+  cacheTimestamp = now;
+  return details;
 };
 
 export interface MockStore {
@@ -301,7 +349,7 @@ export interface MockStore {
   // Auth actions
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string; requires2FA?: boolean }>;
   verify2FA: (code: string) => Promise<{ success: boolean; error?: string }>;
-  logout: () => void;
+  logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
   resetPassword: (email: string, newPassword: string) => Promise<{ success: boolean }>;
   register: (data: Partial<User> & { password: string }) => Promise<{ success: boolean; error?: string }>;
@@ -475,7 +523,11 @@ export const useStore = create<MockStore>((set, get) => ({
         status: "success",
         ...activityDetails,
       }),
-      supabase.from("users").update({ last_login: new Date().toISOString() }).eq("id", user.id),
+      supabase.from("users").update({
+        last_login: new Date().toISOString(),
+        is_online: true,
+        last_seen_at: new Date().toISOString(),
+      }).eq("id", user.id),
     ]);
 
     set((s) => ({
@@ -501,27 +553,23 @@ export const useStore = create<MockStore>((set, get) => ({
     const dbUser = users[0];
     const user = dbToAppUser(dbUser);
 
-    // Always accept demo code "123456" for testing
-    if (code === "123456") {
-      // Demo code accepted
-    } else if (user.totpSecret) {
-      // Verify TOTP code if user has a secret configured
-      const isValid = await verifyTOTPCode(user.totpSecret, code);
-      if (!isValid) {
-        const activityDetails = await fetchClientActivityDetails();
-        await supabase.from("login_activity").insert({
-          user_id: user.id,
-          user_email: user.email,
-          user_name: `${user.firstName} ${user.lastName}`,
-          status: "failed",
-          failure_reason: "Invalid 2FA code",
-          ...activityDetails,
-        });
-        get().fetchAllData();
-        return { success: false, error: "Invalid authentication code. Please try again." };
-      }
-    } else {
-      // No TOTP secret and not demo code
+    // Verify TOTP code - user must have a secret configured
+    if (!user.totpSecret) {
+      const activityDetails = await fetchClientActivityDetails();
+      await supabase.from("login_activity").insert({
+        user_id: user.id,
+        user_email: user.email,
+        user_name: `${user.firstName} ${user.lastName}`,
+        status: "failed",
+        failure_reason: "2FA not configured for this user",
+        ...activityDetails,
+      });
+      get().fetchAllData();
+      return { success: false, error: "Two-factor authentication is not properly configured. Please contact support." };
+    }
+
+    const isValid = await verifyTOTPCode(user.totpSecret, code);
+    if (!isValid) {
       const activityDetails = await fetchClientActivityDetails();
       await supabase.from("login_activity").insert({
         user_id: user.id,
@@ -544,7 +592,11 @@ export const useStore = create<MockStore>((set, get) => ({
         status: "success",
         ...activityDetails,
       }),
-      supabase.from("users").update({ last_login: new Date().toISOString() }).eq("id", user.id),
+      supabase.from("users").update({
+        last_login: new Date().toISOString(),
+        is_online: true,
+        last_seen_at: new Date().toISOString(),
+      }).eq("id", user.id),
     ]);
 
     set((s) => ({
@@ -618,7 +670,14 @@ export const useStore = create<MockStore>((set, get) => ({
     get().fetchAllData();
   },
 
-  logout: () => {
+  logout: async () => {
+    const { auth } = get();
+    if (auth.user) {
+      await supabase.from("users").update({
+        is_online: false,
+        last_seen_at: new Date().toISOString(),
+      }).eq("id", auth.user.id);
+    }
     set({ auth: { user: null, isAuthenticated: false, step: "idle" } });
   },
 

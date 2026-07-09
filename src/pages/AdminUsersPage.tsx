@@ -34,10 +34,10 @@ import { createListCollection } from "@chakra-ui/react";
 import { toaster } from "@/components/ui/toaster";
 import { useStore } from "@/store/store";
 import type { User, UserRole, UserStatus } from "@/store/types";
-import { LuSearch, LuPlus, LuPencil, LuTrash2, LuChevronUp, LuChevronDown } from "react-icons/lu";
+import { LuSearch, LuPlus, LuPencil, LuTrash2, LuChevronUp, LuChevronDown, LuCircle } from "react-icons/lu";
 import { formatDistanceToNow } from "date-fns";
 
-type SortKey = "name" | "email" | "role" | "status" | "createdAt";
+type SortKey = "name" | "email" | "role" | "status" | "createdAt" | "isOnline";
 
 const emptyForm = {
   firstName: "",
@@ -120,6 +120,11 @@ export default function AdminUsersPage() {
       );
     }
     list.sort((a, b) => {
+      if (sort.key === "isOnline") {
+        return sort.dir === "asc"
+          ? (a.isOnline === b.isOnline ? 0 : a.isOnline ? -1 : 1)
+          : (a.isOnline === b.isOnline ? 0 : a.isOnline ? 1 : -1);
+      }
       let av: string, bv: string;
       if (sort.key === "name") { av = `${a.firstName} ${a.lastName}`; bv = `${b.firstName} ${b.lastName}`; }
       else if (sort.key === "email") { av = a.email; bv = b.email; }
@@ -280,7 +285,7 @@ export default function AdminUsersPage() {
                     }}
                   />
                 </th>
-                {([["name", "Name"], ["email", "Email"], ["role", "Role"], ["status", "Status"], ["createdAt", "Joined"]] as [SortKey, string][]).map(([k, label]) => (
+                {([["isOnline", "Status"], ["name", "Name"], ["email", "Email"], ["role", "Role"], ["status", "Account"], ["createdAt", "Joined"]] as [SortKey, string][]).map(([k, label]) => (
                   <th key={k} style={{ padding: "10px 16px", textAlign: "left", fontSize: "12px", fontWeight: "600", color: "var(--chakra-colors-fg-muted)", cursor: "pointer", whiteSpace: "nowrap" }} onClick={() => toggleSort(k)}>
                     <HStack gap="1" display="inline-flex">{label}<SortIcon k={k} /></HStack>
                   </th>
@@ -290,7 +295,7 @@ export default function AdminUsersPage() {
             </thead>
             <tbody>
               {paginated.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding: "32px", textAlign: "center", color: "var(--chakra-colors-fg-muted)" }}>No users found</td></tr>
+                <tr><td colSpan={8} style={{ padding: "32px", textAlign: "center", color: "var(--chakra-colors-fg-muted)" }}>No users found</td></tr>
               ) : paginated.map((u, i) => (
                 <tr key={u.id} style={{ borderTop: "1px solid var(--chakra-colors-border)", background: selected.includes(u.id) ? "var(--chakra-colors-blue-50)" : undefined }}>
                   <td style={{ padding: "12px 16px" }}>
@@ -298,6 +303,20 @@ export default function AdminUsersPage() {
                       checked={selected.includes(u.id)}
                       onCheckedChange={(d) => setSelected((prev) => d.checked ? [...prev, u.id] : prev.filter((id) => id !== u.id))}
                     />
+                  </td>
+                  <td style={{ padding: "12px 16px" }}>
+                    <HStack gap="2">
+                      <Box position="relative">
+                        <LuCircle
+                          size={10}
+                          fill={u.isOnline ? "var(--chakra-colors-green-500)" : "var(--chakra-colors-gray-400)"}
+                          color={u.isOnline ? "var(--chakra-colors-green-500)" : "var(--chakra-colors-gray-400)"}
+                        />
+                      </Box>
+                      <Text fontSize="xs" color={u.isOnline ? "green.500" : "fg.muted"} fontWeight="medium">
+                        {u.isOnline ? "Online" : "Offline"}
+                      </Text>
+                    </HStack>
                   </td>
                   <td style={{ padding: "12px 16px" }}>
                     <HStack gap="3">
