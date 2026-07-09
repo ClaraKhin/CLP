@@ -353,7 +353,7 @@ export interface MockStore {
   getAppsForUser: (user: User) => Application[];
 
   // Data fetching
-  fetchAllData: () => Promise<void>;
+  fetchAllData: (options?: { silent?: boolean }) => Promise<void>;
 }
 
 export const useStore = create<MockStore>((set, get) => ({
@@ -374,8 +374,8 @@ export const useStore = create<MockStore>((set, get) => ({
     pendingUserId: undefined,
   },
 
-  fetchAllData: async () => {
-    set({ loading: true });
+  fetchAllData: async (options?: { silent?: boolean }) => {
+    if (!options?.silent) set({ loading: true });
 
     try {
       const [usersRes, rolesRes, appsRes, activityRes, sessionsRes, ssoRes, templatesRes] = await Promise.all([
@@ -396,11 +396,11 @@ export const useStore = create<MockStore>((set, get) => ({
         sessions: (sessionsRes.data || []).map(dbToAppSession),
         ssoProviders: (ssoRes.data || []).map(dbToAppSSOProvider),
         emailTemplates: (templatesRes.data || []).map(dbToAppEmailTemplate),
-        loading: false,
+        ...(options?.silent ? {} : { loading: false }),
       });
     } catch (error) {
       console.error("Error fetching data:", error);
-      set({ loading: false });
+      if (!options?.silent) set({ loading: false });
     }
   },
 
@@ -672,12 +672,24 @@ export const useStore = create<MockStore>((set, get) => ({
 
   // User management
   addUser: async (userData) => {
+    const email = userData.email.toLowerCase();
+
+    const { data: existing } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", email)
+      .maybeSingle();
+    if (existing) {
+      throw new Error("A user with this email already exists.");
+    }
+
     const newUser = {
-      email: userData.email,
+      email,
       first_name: userData.firstName,
       last_name: userData.lastName,
       role: userData.role,
       status: userData.status,
+      avatar: userData.avatar ?? null,
       two_factor_enabled: userData.twoFactorEnabled,
       password_hash: userData.password,
       phone: userData.phone || "",
@@ -691,18 +703,41 @@ export const useStore = create<MockStore>((set, get) => ({
       timezone: userData.timezone || "America/New_York",
     };
 
-    await supabase.from("users").insert(newUser);
-
-    // Update role user count
-    const { data: roleUsers } = await supabase.from("users").select("id").eq("role", userData.role);
-    const { data: roles } = await supabase.from("roles").select("*");
-    const roleName = userData.role.replace("_", " ");
-    const role = roles?.find(r => r.name.toLowerCase() === roleName.toLowerCase());
-    if (role) {
-      await supabase.from("roles").update({ user_count: roleUsers?.length || 0 + 1 }).eq("id", role.id);
+    const { data: inserted, error: insertError } = await supabase
+      .from("users")
+      .insert(newUser)
+      .select();
+    if (insertError) {
+      throw new Error(`Failed to create user: ${insertError.message}`);
+    }
+    if (!inserted || inserted.length === 0) {
+      throw new Error("Failed to create user: no data returned.");
     }
 
-    get().fetchAllData();
+    set((state) => ({ users: [...state.users, dbToAppUser(inserted[0])] }));
+
+    // Update role user count
+    try {
+      const { count } = await supabase
+        .from("users")
+        .select("*", { count: "exact", head: true })
+        .eq("role", userData.role);
+      const roleName = userData.role.replace(/_/g, " ");
+      const { data: roles } = await supabase.from("roles").select("*");
+      const role = roles?.find(r => r.name.toLowerCase() === roleName.toLowerCase());
+      if (role) {
+        await supabase.from("roles").update({ user_count: count || 0 }).eq("id", role.id);
+        set((state) => ({
+          roles: state.roles.map((r) =>
+            r.id === role.id ? { ...r, userCount: count || 0 } : r
+          ),
+        }));
+      }
+    } catch (err) {
+      console.error("Failed to update role user count:", err);
+    }
+
+    await get().fetchAllData({ silent: true });
   },
 
   updateUser: async (id, updates) => {

@@ -176,17 +176,22 @@ export default function AdminUsersPage() {
     await new Promise((r) => setTimeout(r, 800));
     const role = (formRole[0] || "user") as UserRole;
     const status = (formStatus[0] || "active") as UserStatus;
-    if (editingUser) {
-      const updates: Partial<User> = { firstName: form.firstName, lastName: form.lastName, email: form.email, role, status, phone: form.phone, department: form.department };
-      if (form.password) updates.password = form.password;
-      await updateUser(editingUser.id, updates);
-      toaster.create({ title: "User updated successfully", type: "success" });
-    } else {
-      await addUser({ firstName: form.firstName, lastName: form.lastName, email: form.email, password: form.password, role, status, phone: form.phone, department: form.department, twoFactorEnabled: false, favoriteApps: [], sessionCount: 0, notificationsEnabled: true, emailNotifications: true, theme: "dark", language: "en", timezone: "America/New_York" });
-      toaster.create({ title: "User created successfully", type: "success" });
+    try {
+      if (editingUser) {
+        const updates: Partial<User> = { firstName: form.firstName, lastName: form.lastName, email: form.email, role, status, phone: form.phone, department: form.department };
+        if (form.password) updates.password = form.password;
+        await updateUser(editingUser.id, updates);
+        toaster.create({ title: "User updated successfully", type: "success" });
+      } else {
+        await addUser({ firstName: form.firstName, lastName: form.lastName, email: form.email, password: form.password, role, status, phone: form.phone, department: form.department, twoFactorEnabled: false, favoriteApps: [], sessionCount: 0, notificationsEnabled: true, emailNotifications: true, theme: "dark", language: "en", timezone: "America/New_York" });
+        toaster.create({ title: "User created successfully", type: "success" });
+      }
+      setFormLoading(false);
+      setShowModal(false);
+    } catch (err: any) {
+      toaster.create({ title: err.message || "Failed to save user", type: "error" });
+      setFormLoading(false);
     }
-    setFormLoading(false);
-    setShowModal(false);
   };
 
   const handleDelete = async () => {
@@ -291,7 +296,7 @@ export default function AdminUsersPage() {
             <tbody>
               {paginated.length === 0 ? (
                 <tr><td colSpan={7} style={{ padding: "32px", textAlign: "center", color: "var(--chakra-colors-fg-muted)" }}>No users found</td></tr>
-              ) : paginated.map((u, i) => (
+              ) : paginated.map((u) => (
                 <tr key={u.id} style={{ borderTop: "1px solid var(--chakra-colors-border)", background: selected.includes(u.id) ? "var(--chakra-colors-blue-50)" : undefined }}>
                   <td style={{ padding: "12px 16px" }}>
                     <Checkbox
@@ -397,7 +402,7 @@ export default function AdminUsersPage() {
               </VStack>
             </DialogBody>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
               <Button type="submit" colorPalette="blue" loading={formLoading} loadingText="Saving...">
                 {editingUser ? "Save Changes" : "Create User"}
               </Button>
