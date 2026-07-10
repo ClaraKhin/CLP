@@ -24,6 +24,7 @@ import { toaster } from "@/components/ui/toaster";
 import IconRenderer from "@/components/IconRenderer";
 import { useStore } from "@/store/store";
 import type { Application, UserRole } from "@/store/types";
+import { normalizeRole } from "@/store/types";
 import { LuPlus, LuPencil, LuTrash2, LuRefreshCw, LuSearch, LuExternalLink } from "react-icons/lu";
 
 const emptyForm = {
@@ -48,7 +49,7 @@ const statusOptions = createListCollection({
 });
 
 export default function AdminAppsPage() {
-  const { applications, roles, addApplication, updateApplication, deleteApplication, regenerateSecretKey } = useStore();
+  const { applications, roles, addApplication, updateApplication, deleteApplication, regenerateSecretKey, auth } = useStore();
 
   const allRoles = useMemo(() => roles.map((r) => r.name.toLowerCase().replace(/ /g, "_")), [roles]);
 
@@ -77,7 +78,10 @@ export default function AdminAppsPage() {
 
   const openAdd = () => {
     setEditingApp(null);
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+      allowedRoles: auth.user ? [normalizeRole(auth.user.role)] : [],
+    });
     setFormStatus(["active"]);
     setFormErrors({});
     setShowModal(true);
