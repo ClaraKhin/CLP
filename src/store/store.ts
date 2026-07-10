@@ -273,7 +273,7 @@ const fetchClientActivityDetails = async (): Promise<ActivityDetails> => {
     const details = { ...defaultDetails, ...parsed };
 
     try {
-      const response = await fetchWithTimeout("https://ipwho.is/json/");
+      const response = await fetchWithTimeout("https://ipwho.is/");
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -301,7 +301,7 @@ const fetchClientActivityDetails = async (): Promise<ActivityDetails> => {
 
     if (details.location === "Unknown Location" && details.ip !== "Unknown IP") {
       try {
-        const response = await fetchWithTimeout(`https://ipwho.is/${encodeURIComponent(details.ip)}/json/`);
+        const response = await fetchWithTimeout(`https://ipwho.is/${encodeURIComponent(details.ip)}`);
         if (response.ok) {
           const data = await response.json();
           if (data.success) {
