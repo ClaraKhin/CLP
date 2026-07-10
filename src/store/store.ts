@@ -254,7 +254,7 @@ const parseDeviceAndBrowser = (userAgent: string): { device: string; browser: st
 const fetchClientActivityDetails = async (): Promise<ActivityDetails> => {
   if (cachedActivityDetails) {
     const cached = await cachedActivityDetails;
-    if (cached.ip !== "Unknown IP") return cached;
+    if (cached.ip !== "Unknown IP" && cached.location !== "Unknown Location") return cached;
     cachedActivityDetails = null;
   }
 
@@ -271,20 +271,20 @@ const fetchClientActivityDetails = async (): Promise<ActivityDetails> => {
     const userAgent = window.navigator.userAgent || "";
     const parsed = parseDeviceAndBrowser(userAgent);
     const details = { ...defaultDetails, ...parsed };
-    console.log("[fetchClientActivityDetails] starting", details);
 
     try {
-      const response = await fetchWithTimeout("https://ipapi.co/json/");
+      const response = await fetchWithTimeout("https://ipwho.is/json/");
       if (response.ok) {
         const data = await response.json();
-        console.log("[fetchClientActivityDetails] ipapi response", response.status, data);
-        details.ip = data.ip || details.ip;
-        details.location = [data.city, data.region, data.country_name]
-          .filter(Boolean)
-          .join(", ") || data.country_name || details.location;
+        if (data.success) {
+          details.ip = data.ip || details.ip;
+          details.location = [data.city, data.region, data.country]
+            .filter(Boolean)
+            .join(", ") || data.country || details.location;
+        }
       }
-    } catch (error) {
-      console.error("[fetchClientActivityDetails] ipapi failed", error);
+    } catch {
+      // ignore failures
     }
 
     if (details.ip === "Unknown IP") {
@@ -292,30 +292,29 @@ const fetchClientActivityDetails = async (): Promise<ActivityDetails> => {
         const response = await fetchWithTimeout("https://api.ipify.org?format=json");
         if (response.ok) {
           const data = await response.json();
-          console.log("[fetchClientActivityDetails] ipify response", response.status, data);
           if (data.ip) details.ip = data.ip;
         }
-      } catch (error) {
-        console.error("[fetchClientActivityDetails] ipify failed", error);
+      } catch {
+        // ignore failures
       }
     }
 
     if (details.location === "Unknown Location" && details.ip !== "Unknown IP") {
       try {
-        const response = await fetchWithTimeout(`https://ipapi.co/${encodeURIComponent(details.ip)}/json/`);
+        const response = await fetchWithTimeout(`https://ipwho.is/${encodeURIComponent(details.ip)}/json/`);
         if (response.ok) {
           const data = await response.json();
-          console.log("[fetchClientActivityDetails] location fallback response", response.status, data);
-          details.location = [data.city, data.region, data.country_name]
-            .filter(Boolean)
-            .join(", ") || data.country_name || details.location;
+          if (data.success) {
+            details.location = [data.city, data.region, data.country]
+              .filter(Boolean)
+              .join(", ") || data.country || details.location;
+          }
         }
-      } catch (error) {
-        console.error("[fetchClientActivityDetails] location fallback failed", error);
+      } catch {
+        // ignore failures
       }
     }
 
-    console.log("[fetchClientActivityDetails] final details", details);
     return details;
   })();
 
