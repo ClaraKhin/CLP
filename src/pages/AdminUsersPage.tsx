@@ -34,7 +34,7 @@ import { createListCollection } from "@chakra-ui/react";
 import { toaster } from "@/components/ui/toaster";
 import { useStore } from "@/store/store";
 import type { User, UserRole, UserStatus } from "@/store/types";
-import { LuSearch, LuPlus, LuPencil, LuTrash2, LuChevronUp, LuChevronDown, LuCircle } from "react-icons/lu";
+import { LuSearch, LuPlus, LuPencil, LuTrash2, LuChevronUp, LuChevronDown } from "react-icons/lu";
 import { formatDistanceToNow } from "date-fns";
 
 type SortKey = "name" | "email" | "role" | "status" | "createdAt" | "isOnline";
@@ -64,7 +64,7 @@ export default function AdminUsersPage() {
 
   const roleOptions = useMemo(() => createListCollection({
     items: roles.length > 0
-      ? roles.map((r) => ({ label: r.name, value: r.name.toLowerCase().replace(/ /g, "_") }))
+      ? roles.map((r) => ({ label: r.name, value: r.name }))
       : [
           { label: "Super Admin", value: "super_admin" },
           { label: "Admin", value: "admin" },
@@ -75,7 +75,7 @@ export default function AdminUsersPage() {
 
   const roleFilterOptions = useMemo(() => createListCollection({
     items: roles.length > 0
-      ? [{ label: "All Roles", value: "all" }, ...roles.map((r) => ({ label: r.name, value: r.name.toLowerCase().replace(/ /g, "_") }))]
+      ? [{ label: "All Roles", value: "all" }, ...roles.map((r) => ({ label: r.name, value: r.name }))]
       : [
           { label: "All Roles", value: "all" },
           { label: "Super Admin", value: "super_admin" },
@@ -181,17 +181,22 @@ export default function AdminUsersPage() {
     await new Promise((r) => setTimeout(r, 800));
     const role = (formRole[0] || "user") as UserRole;
     const status = (formStatus[0] || "active") as UserStatus;
-    if (editingUser) {
-      const updates: Partial<User> = { firstName: form.firstName, lastName: form.lastName, email: form.email, role, status, phone: form.phone, department: form.department };
-      if (form.password) updates.password = form.password;
-      await updateUser(editingUser.id, updates);
-      toaster.create({ title: "User updated successfully", type: "success" });
-    } else {
-      await addUser({ firstName: form.firstName, lastName: form.lastName, email: form.email, password: form.password, role, status, phone: form.phone, department: form.department, twoFactorEnabled: false, favoriteApps: [], sessionCount: 0, notificationsEnabled: true, emailNotifications: true, theme: "dark", language: "en", timezone: "America/New_York" });
-      toaster.create({ title: "User created successfully", type: "success" });
+    try {
+      if (editingUser) {
+        const updates: Partial<User> = { firstName: form.firstName, lastName: form.lastName, email: form.email, role, status, phone: form.phone, department: form.department };
+        if (form.password) updates.password = form.password;
+        await updateUser(editingUser.id, updates);
+        toaster.create({ title: "User updated successfully", type: "success" });
+      } else {
+        await addUser({ firstName: form.firstName, lastName: form.lastName, email: form.email, password: form.password, role, status, phone: form.phone, department: form.department, twoFactorEnabled: false, favoriteApps: [], sessionCount: 0, notificationsEnabled: true, emailNotifications: true, theme: "dark", language: "en", timezone: "America/New_York" });
+        toaster.create({ title: "User created successfully", type: "success" });
+      }
+      setFormLoading(false);
+      setShowModal(false);
+    } catch (err: any) {
+      toaster.create({ title: err.message || "Failed to save user", type: "error" });
+      setFormLoading(false);
     }
-    setFormLoading(false);
-    setShowModal(false);
   };
 
   const handleDelete = async () => {
@@ -217,7 +222,12 @@ export default function AdminUsersPage() {
     sort.key === k ? (sort.dir === "asc" ? <LuChevronUp size={14} /> : <LuChevronDown size={14} />) : null;
 
   const statusColor = (s: string) => s === "active" ? "green" : s === "inactive" ? "gray" : "red";
-  const roleColor = (r: string) => r === "super_admin" ? "purple" : r === "admin" ? "blue" : r === "viewer" ? "orange" : "gray";
+  const roleColor = (r: string) => {
+    const custom = roles.find((role) => role.name === r);
+    if (custom) return custom.color;
+    const n = normalizeRole(r);
+    return n === "super_admin" ? "purple" : n === "admin" ? "blue" : n === "viewer" ? "orange" : "gray";
+  };
 
   return (
     <Box p={{ base: "4", md: "6", lg: "8" }} maxW="1400px" mx="auto">
@@ -295,7 +305,7 @@ export default function AdminUsersPage() {
             </thead>
             <tbody>
               {paginated.length === 0 ? (
-                <tr><td colSpan={8} style={{ padding: "32px", textAlign: "center", color: "var(--chakra-colors-fg-muted)" }}>No users found</td></tr>
+                <tr><td colSpan={7} style={{ padding: "32px", textAlign: "center", color: "var(--chakra-colors-fg-muted)" }}>No users found</td></tr>
               ) : paginated.map((u, i) => (
                 <tr key={u.id} style={{ borderTop: "1px solid var(--chakra-colors-border)", background: selected.includes(u.id) ? "var(--chakra-colors-blue-50)" : undefined }}>
                   <td style={{ padding: "12px 16px" }}>
@@ -329,7 +339,7 @@ export default function AdminUsersPage() {
                   </td>
                   <td style={{ padding: "12px 16px", fontSize: "14px" }}>{u.email}</td>
                   <td style={{ padding: "12px 16px" }}>
-                    <Badge colorPalette={roleColor(u.role)} size="sm">{u.role.replace("_", " ")}</Badge>
+                    <Badge colorPalette={roleColor(u.role)} size="sm">{u.role.replace(/_/g, " ")}</Badge>
                   </td>
                   <td style={{ padding: "12px 16px" }}>
                     <Badge colorPalette={statusColor(u.status)} size="sm">{u.status}</Badge>
@@ -416,7 +426,7 @@ export default function AdminUsersPage() {
               </VStack>
             </DialogBody>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
               <Button type="submit" colorPalette="blue" loading={formLoading} loadingText="Saving...">
                 {editingUser ? "Save Changes" : "Create User"}
               </Button>
