@@ -51,10 +51,7 @@ const statusOptions = createListCollection({
 export default function AdminAppsPage() {
   const { applications, roles, addApplication, updateApplication, deleteApplication, regenerateSecretKey } = useStore();
 
-  const allRoles = useMemo(() => roles.length > 0
-    ? roles.map((r) => r.name.toLowerCase().replace(/ /g, "_"))
-    : ["super_admin", "admin", "user", "viewer"],
-  [roles]);
+  const allRoles = useMemo(() => roles.map((r) => r.name.toLowerCase().replace(/ /g, "_")), [roles]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>(["all"]);
