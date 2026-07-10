@@ -11,6 +11,7 @@ import {
   Badge,
 } from "@chakra-ui/react";
 import { useStore } from "@/store/store";
+import { normalizeRole } from "@/store/types";
 import {
   LuSearch,
   LuGrid3X3,
@@ -60,7 +61,10 @@ export default function MyApplicationsPage() {
   });
 
   const accessibleApps = useMemo(
-    () => applications.filter((a) => a.allowedRoles.includes(user.role)),
+    () =>
+      applications.filter((a) =>
+        a.allowedRoles.some((role) => normalizeRole(role) === normalizeRole(user.role))
+      ),
     [applications, user.role]
   );
 

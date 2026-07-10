@@ -11,6 +11,7 @@ import {
   Badge,
 } from "@chakra-ui/react";
 import { useStore } from "@/store/store";
+import { normalizeRole } from "@/store/types";
 import { LuSearch, LuExternalLink, LuStar, LuClock, LuGrid3X3 } from "react-icons/lu";
 import { formatDistanceToNow } from "date-fns";
 import { toaster } from "@/components/ui/toaster";
@@ -26,7 +27,10 @@ export default function AppLauncherPage() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const userApps = useMemo(
-    () => applications.filter((a) => a.allowedRoles.includes(user.role) && a.status !== "inactive"),
+    () =>
+      applications.filter(
+        (a) => a.allowedRoles.some((role) => normalizeRole(role) === normalizeRole(user.role)) && a.status !== "inactive"
+      ),
     [applications, user.role]
   );
 
