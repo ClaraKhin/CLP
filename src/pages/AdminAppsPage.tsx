@@ -319,14 +319,15 @@ export default function AdminAppsPage() {
                       <Checkbox
                         key={role}
                         checked={form.allowedRoles.includes(role)}
-                        onCheckedChange={(d) =>
+                        onClick={() =>
                           setForm((f) => ({
                             ...f,
-                            allowedRoles: d.checked
-                              ? [...f.allowedRoles, role]
-                              : f.allowedRoles.filter((r) => r !== role),
+                            allowedRoles: f.allowedRoles.includes(role)
+                              ? f.allowedRoles.filter((r) => r !== role)
+                              : [...f.allowedRoles, role],
                           }))
                         }
+                        cursor="pointer"
                       >
                         {role.replace("_", " ")}
                       </Checkbox>
