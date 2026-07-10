@@ -333,7 +333,7 @@ export default function MyApplicationsPage() {
           borderRadius="xl"
           borderWidth="1px"
           borderColor="border"
-          py="16"
+          py="1"
           textAlign="center"
         >
           <VStack gap="3" color="fg.muted">

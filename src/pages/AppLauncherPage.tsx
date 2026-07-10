@@ -97,6 +97,7 @@ export default function AppLauncherPage() {
         borderWidth="1px"
         borderColor="border"
         p="5"
+        w="300px"
         cursor="pointer"
         _hover={{ shadow: "lg", borderColor: "blue.300", transform: "translateY(-2px)" }}
         transition="all 0.15s"
@@ -125,7 +126,7 @@ export default function AppLauncherPage() {
         <Badge
           colorPalette={app.status === "active" ? "green" : "orange"}
           size="xs"
-          mb="2"
+          mb="3"
         >
           {app.status}
         </Badge>
