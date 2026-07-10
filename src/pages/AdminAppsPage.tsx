@@ -102,15 +102,6 @@ export default function AdminAppsPage() {
     setShowModal(true);
   };
 
-  const toggleRole = (role: UserRole) => {
-    setForm((f) => ({
-      ...f,
-      allowedRoles: f.allowedRoles.includes(role)
-        ? f.allowedRoles.filter((r) => r !== role)
-        : [...f.allowedRoles, role],
-    }));
-  };
-
   const validate = () => {
     const errs: Record<string, string> = {};
     if (!form.name.trim()) errs.name = "Required";
@@ -328,7 +319,14 @@ export default function AdminAppsPage() {
                       <Checkbox
                         key={role}
                         checked={form.allowedRoles.includes(role)}
-                        onCheckedChange={() => toggleRole(role)}
+                        onCheckedChange={(d) =>
+                          setForm((f) => ({
+                            ...f,
+                            allowedRoles: d.checked
+                              ? [...f.allowedRoles, role]
+                              : f.allowedRoles.filter((r) => r !== role),
+                          }))
+                        }
                       >
                         {role.replace("_", " ")}
                       </Checkbox>
