@@ -226,6 +226,12 @@ type ActivityDetails = {
 
 let cachedActivityDetails: Promise<ActivityDetails> | null = null;
 
+const fetchWithTimeout = (url: string, timeoutMs = 3000): Promise<Response> => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));
+};
+
 const parseDeviceAndBrowser = (userAgent: string): { device: string; browser: string } => {
   const ua = userAgent.toLowerCase();
   const device = /tablet|ipad|playbook|silk/.test(ua)
@@ -246,7 +252,11 @@ const parseDeviceAndBrowser = (userAgent: string): { device: string; browser: st
 };
 
 const fetchClientActivityDetails = async (): Promise<ActivityDetails> => {
-  if (cachedActivityDetails) return cachedActivityDetails;
+  if (cachedActivityDetails) {
+    const cached = await cachedActivityDetails;
+    if (cached.ip !== "Unknown IP") return cached;
+    cachedActivityDetails = null;
+  }
 
   cachedActivityDetails = (async () => {
     const defaultDetails: ActivityDetails = {
@@ -261,20 +271,51 @@ const fetchClientActivityDetails = async (): Promise<ActivityDetails> => {
     const userAgent = window.navigator.userAgent || "";
     const parsed = parseDeviceAndBrowser(userAgent);
     const details = { ...defaultDetails, ...parsed };
+    console.log("[fetchClientActivityDetails] starting", details);
 
     try {
-      const response = await fetch("https://ipapi.co/json/");
+      const response = await fetchWithTimeout("https://ipapi.co/json/");
       if (response.ok) {
         const data = await response.json();
+        console.log("[fetchClientActivityDetails] ipapi response", response.status, data);
         details.ip = data.ip || details.ip;
         details.location = [data.city, data.region, data.country_name]
           .filter(Boolean)
           .join(", ") || data.country_name || details.location;
       }
-    } catch {
-      // ignore failures
+    } catch (error) {
+      console.error("[fetchClientActivityDetails] ipapi failed", error);
     }
 
+    if (details.ip === "Unknown IP") {
+      try {
+        const response = await fetchWithTimeout("https://api.ipify.org?format=json");
+        if (response.ok) {
+          const data = await response.json();
+          console.log("[fetchClientActivityDetails] ipify response", response.status, data);
+          if (data.ip) details.ip = data.ip;
+        }
+      } catch (error) {
+        console.error("[fetchClientActivityDetails] ipify failed", error);
+      }
+    }
+
+    if (details.location === "Unknown Location" && details.ip !== "Unknown IP") {
+      try {
+        const response = await fetchWithTimeout(`https://ipapi.co/${encodeURIComponent(details.ip)}/json/`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log("[fetchClientActivityDetails] location fallback response", response.status, data);
+          details.location = [data.city, data.region, data.country_name]
+            .filter(Boolean)
+            .join(", ") || data.country_name || details.location;
+        }
+      } catch (error) {
+        console.error("[fetchClientActivityDetails] location fallback failed", error);
+      }
+    }
+
+    console.log("[fetchClientActivityDetails] final details", details);
     return details;
   })();
 
@@ -353,7 +394,7 @@ export interface MockStore {
   getAppsForUser: (user: User) => Application[];
 
   // Data fetching
-  fetchAllData: () => Promise<void>;
+  fetchAllData: (options?: { silent?: boolean }) => Promise<void>;
 }
 
 export const useStore = create<MockStore>((set, get) => ({
@@ -374,8 +415,8 @@ export const useStore = create<MockStore>((set, get) => ({
     pendingUserId: undefined,
   },
 
-  fetchAllData: async () => {
-    set({ loading: true });
+  fetchAllData: async (options?: { silent?: boolean }) => {
+    if (!options?.silent) set({ loading: true });
 
     try {
       const [usersRes, rolesRes, appsRes, activityRes, sessionsRes, ssoRes, templatesRes] = await Promise.all([
@@ -396,11 +437,11 @@ export const useStore = create<MockStore>((set, get) => ({
         sessions: (sessionsRes.data || []).map(dbToAppSession),
         ssoProviders: (ssoRes.data || []).map(dbToAppSSOProvider),
         emailTemplates: (templatesRes.data || []).map(dbToAppEmailTemplate),
-        loading: false,
+        ...(options?.silent ? {} : { loading: false }),
       });
     } catch (error) {
       console.error("Error fetching data:", error);
-      set({ loading: false });
+      if (!options?.silent) set({ loading: false });
     }
   },
 
@@ -672,12 +713,24 @@ export const useStore = create<MockStore>((set, get) => ({
 
   // User management
   addUser: async (userData) => {
+    const email = userData.email.toLowerCase();
+
+    const { data: existing } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", email)
+      .maybeSingle();
+    if (existing) {
+      throw new Error("A user with this email already exists.");
+    }
+
     const newUser = {
-      email: userData.email,
+      email,
       first_name: userData.firstName,
       last_name: userData.lastName,
       role: userData.role,
       status: userData.status,
+      avatar: userData.avatar ?? null,
       two_factor_enabled: userData.twoFactorEnabled,
       password_hash: userData.password,
       phone: userData.phone || "",
@@ -691,18 +744,40 @@ export const useStore = create<MockStore>((set, get) => ({
       timezone: userData.timezone || "America/New_York",
     };
 
-    await supabase.from("users").insert(newUser);
-
-    // Update role user count
-    const { data: roleUsers } = await supabase.from("users").select("id").eq("role", userData.role);
-    const { data: roles } = await supabase.from("roles").select("*");
-    const roleName = userData.role.replace("_", " ");
-    const role = roles?.find(r => r.name.toLowerCase() === roleName.toLowerCase());
-    if (role) {
-      await supabase.from("roles").update({ user_count: roleUsers?.length || 0 + 1 }).eq("id", role.id);
+    const { data: inserted, error: insertError } = await supabase
+      .from("users")
+      .insert(newUser)
+      .select();
+    if (insertError) {
+      throw new Error(`Failed to create user: ${insertError.message}`);
+    }
+    if (!inserted || inserted.length === 0) {
+      throw new Error("Failed to create user: no data returned.");
     }
 
-    get().fetchAllData();
+    set((state) => ({ users: [...state.users, dbToAppUser(inserted[0])] }));
+
+    // Update role user count
+    try {
+      const { count } = await supabase
+        .from("users")
+        .select("*", { count: "exact", head: true })
+        .eq("role", userData.role);
+      const { data: roles } = await supabase.from("roles").select("*");
+      const role = roles?.find(r => r.name === userData.role);
+      if (role) {
+        await supabase.from("roles").update({ user_count: count || 0 }).eq("id", role.id);
+        set((state) => ({
+          roles: state.roles.map((r) =>
+            r.id === role.id ? { ...r, userCount: count || 0 } : r
+          ),
+        }));
+      }
+    } catch (err) {
+      console.error("Failed to update role user count:", err);
+    }
+
+    await get().fetchAllData({ silent: true });
   },
 
   updateUser: async (id, updates) => {
@@ -739,7 +814,7 @@ export const useStore = create<MockStore>((set, get) => ({
       const { data: allRoles } = await supabase.from("roles").select("*");
       if (allRoles) {
         for (const role of allRoles) {
-          const { count } = await supabase.from("users").select("*", { count: "exact", head: true }).eq("role", role.name.toLowerCase().replace(" ", "_"));
+          const { count } = await supabase.from("users").select("*", { count: "exact", head: true }).eq("role", role.name);
           await supabase.from("roles").update({ user_count: count || 0 }).eq("id", role.id);
         }
       }
@@ -765,7 +840,7 @@ export const useStore = create<MockStore>((set, get) => ({
     const { data: allRoles } = await supabase.from("roles").select("*");
     if (allRoles) {
       for (const r of allRoles) {
-        const { count } = await supabase.from("users").select("*", { count: "exact", head: true }).eq("role", r.name.toLowerCase().replace(" ", "_"));
+        const { count } = await supabase.from("users").select("*", { count: "exact", head: true }).eq("role", r.name);
         await supabase.from("roles").update({ user_count: count || 0 }).eq("id", r.id);
       }
     }

@@ -41,7 +41,7 @@ interface AdminDashboardPageProps {
 }
 
 export default function AdminDashboardPage({ onNavigate }: AdminDashboardPageProps) {
-  const { users, applications, loginActivity, roles } = useStore();
+  const { users, applications, loginActivity, roles, auth } = useStore();
 
   const totalUsers = users.length;
   const activeUsers = users.filter((u) => u.status === "active").length;
@@ -83,6 +83,14 @@ export default function AdminDashboardPage({ onNavigate }: AdminDashboardPagePro
     return Object.entries(counts).map(([cat, count]) => ({ name: cat, value: count }));
   }, [applications]);
 
+
+
+  const recentActivity = loginActivity.slice(0, 8);
+  const currentUserActivity = loginActivity.filter(
+    (a)=> a.userId === auth.user?.id && a.status === "success"
+  );
+  const lastLoginIp = currentUserActivity[0]?.ip || "—";
+
   const PIE_COLORS = ["#2563eb", "#9333ea", "#14b8a6", "#f59e0b", "#ef4444", "#10b981"];
 
   const stats = [
@@ -90,9 +98,10 @@ export default function AdminDashboardPage({ onNavigate }: AdminDashboardPagePro
     { label: "Applications", value: totalApps, sub: `${activeApps} active`, icon: LuAppWindow, color: "purple", page: "admin-apps" },
     { label: "Successful Logins", value: totalLogins, sub: "All time", icon: LuCircleCheck, color: "green", page: "admin-activity" },
     { label: "Failed/Blocked", value: failedLogins, sub: "Requires attention", icon: LuCircleAlert, color: "red", page: "admin-activity" },
+    {label: "Last Login IP", value: lastLoginIp, sub: "Most recent successful login", icon: LuMonitor, color: "teal", page: "admin-activity"},
   ];
 
-  const recentActivity = loginActivity.slice(0, 8);
+
 
   return (
     <Box p={{ base: "4", md: "6", lg: "8" }} maxW="1400px" mx="auto">
@@ -267,8 +276,8 @@ export default function AdminDashboardPage({ onNavigate }: AdminDashboardPagePro
                   </td>
                   <td style={{ padding: "12px 16px" }}>
                     <VStack gap="0" alignItems="start">
-                      <Text fontSize="sm">{activity.ip}</Text>
-                      <Text fontSize="xs" color="var(--chakra-colors-fg-muted)">{activity.location}</Text>
+                      <Text fontSize="sm">{activity.browser}</Text>
+                      <Text fontSize="xs" color="var(--chakra-colors-fg-muted)">{activity.ip} <span style={{paddingLeft: "9px"}}>{activity.location}</span> </Text>
                     </VStack>
                   </td>
                   <td style={{ padding: "12px 16px", fontSize: "13px", color: "var(--chakra-colors-fg-muted)" }}>

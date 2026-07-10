@@ -119,7 +119,7 @@ export default function AdminRolesPage() {
   const colorOptions = ["blue", "purple", "teal", "green", "orange", "red", "gray", "pink"];
 
   const deleteRole_ = roles.find((r) => r.id === deleteTarget);
-  const deleteRoleUserCount = deleteRole_ ? (roleUserCounts[deleteRole_.name.toLowerCase().replace(" ", "_")] || deleteRole_.userCount) : 0;
+  const deleteRoleUserCount = deleteRole_ ? (roleUserCounts[deleteRole_.name] ?? deleteRole_.userCount) : 0;
 
   return (
     <Box p={{ base: "4", md: "6", lg: "8" }} maxW="1400px" mx="auto">
@@ -136,7 +136,7 @@ export default function AdminRolesPage() {
       <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} gap="4">
         {roles.map((role) => {
           const permCount = countPermissions(role.permissions);
-          const userCount = roleUserCounts[role.name.toLowerCase().replace(/ /g, "_")] ?? role.userCount;
+          const userCount = roleUserCounts[role.name] ?? role.userCount;
           return (
             <Box key={role.id} bg="bg.panel" borderRadius="xl" borderWidth="1px" borderColor="border" p="5" _hover={{ shadow: "md" }} transition="shadow 0.15s">
               <HStack justifyContent="space-between" mb="3">

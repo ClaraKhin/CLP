@@ -13,6 +13,7 @@ import {
 } from "@chakra-ui/react";
 import { Avatar } from "@/components/ui/avatar";
 import { useStore } from "@/store/store";
+import { normalizeRole } from "@/store/types";
 import {
   LuLayoutDashboard,
   LuGrid3X3,
@@ -59,7 +60,8 @@ export default function AppShell({ children, currentPage, onNavigate }: AppShell
   const { auth, logout } = useStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const user = auth.user;
-  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
+  const normalizedRole = user ? normalizeRole(user.role) : "";
+  const isAdmin = normalizedRole === "admin" || normalizedRole === "super_admin";
 
   const SidebarContent = ({ compact = false }: { compact?: boolean }) => (
     <VStack gap="0" h="full" alignItems="stretch">
@@ -185,8 +187,8 @@ export default function AppShell({ children, currentPage, onNavigate }: AppShell
             />
             <VStack gap="0" alignItems="start" flex="1" minW="0">
               <Text fontSize="sm" fontWeight="semibold" truncate>{user?.firstName} {user?.lastName}</Text>
-              <Badge size="xs" colorPalette={user?.role === "super_admin" ? "purple" : user?.role === "admin" ? "blue" : "gray"}>
-                {user?.role?.replace("_", " ")}
+              <Badge size="xs" colorPalette={normalizedRole === "super_admin" ? "purple" : normalizedRole === "admin" ? "blue" : "gray"}>
+                {user?.role?.replace(/_/g, " ")}
               </Badge>
             </VStack>
             <Button variant="ghost" size="sm" px="1" onClick={logout} aria-label="Sign out">

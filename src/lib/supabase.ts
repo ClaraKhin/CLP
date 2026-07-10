@@ -10,7 +10,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Database types
-export type UserRole = "super_admin" | "admin" | "user" | "viewer";
+export type UserRole = string;
 export type UserStatus = "active" | "inactive" | "suspended";
 export type AppStatus = "active" | "inactive" | "maintenance";
 export type LoginStatus = "success" | "failed" | "blocked";

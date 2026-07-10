@@ -18,6 +18,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Avatar } from "@/components/ui/avatar";
 import { toaster } from "@/components/ui/toaster";
 import { useStore } from "@/store/store";
+import { normalizeRole } from "@/store/types";
 import {
   LuUser,
   LuSettings2,
@@ -227,8 +228,8 @@ export default function AccountSettingsPage() {
               <Avatar size="xl" name={`${user.firstName} ${user.lastName}`} src={user.avatar} />
               <VStack alignItems="start" gap="1">
                 <Text fontWeight="semibold">{user.firstName} {user.lastName}</Text>
-                <Badge colorPalette={user.role === "super_admin" ? "purple" : user.role === "admin" ? "blue" : "gray"}>
-                  {user.role.replace("_", " ")}
+                <Badge colorPalette={normalizeRole(user.role) === "super_admin" ? "purple" : normalizeRole(user.role) === "admin" ? "blue" : "gray"}>
+                  {user.role.replace(/_/g, " ")}
                 </Badge>
                 <Text fontSize="sm" color="fg.muted">Member since {new Date(user.createdAt).toLocaleDateString()}</Text>
               </VStack>
