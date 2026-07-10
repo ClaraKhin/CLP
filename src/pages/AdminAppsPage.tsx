@@ -12,7 +12,6 @@ import {
   Textarea,
 } from "@chakra-ui/react";
 import { Field } from "@/components/ui/field";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   DialogRoot, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, DialogCloseTrigger,
 } from "@/components/ui/dialog";
@@ -315,23 +314,45 @@ export default function AdminAppsPage() {
                 </Field>
                 <Field label="Allowed Roles" invalid={!!formErrors.roles} errorText={formErrors.roles} w="full">
                   <HStack gap="3" flexWrap="wrap">
-                    {allRoles.map((role) => (
-                      <Checkbox
-                        key={role}
-                        checked={form.allowedRoles.includes(role)}
-                        onClick={() =>
-                          setForm((f) => ({
-                            ...f,
-                            allowedRoles: f.allowedRoles.includes(role)
-                              ? f.allowedRoles.filter((r) => r !== role)
-                              : [...f.allowedRoles, role],
-                          }))
-                        }
-                        cursor="pointer"
-                      >
-                        {role.replace("_", " ")}
-                      </Checkbox>
-                    ))}
+                    {allRoles.map((role) => {
+                      const isChecked = form.allowedRoles.includes(role);
+                      return (
+                        <HStack
+                          key={role}
+                          gap="2"
+                          cursor="pointer"
+                          onClick={() =>
+                            setForm((f) => ({
+                              ...f,
+                              allowedRoles: isChecked
+                                ? f.allowedRoles.filter((r) => r !== role)
+                                : [...f.allowedRoles, role],
+                            }))
+                          }
+                        >
+                          <Box
+                            w="4"
+                            h="4"
+                            borderWidth="1px"
+                            borderColor={isChecked ? "blue.500" : "border"}
+                            bg={isChecked ? "blue.500" : "transparent"}
+                            borderRadius="sm"
+                            display="flex"
+                            alignItems="center"
+                            justifyContent="center"
+                          >
+                            {isChecked && (
+                              <Text color="white" fontSize="xs" lineHeight="1">
+                                ✓
+                              </Text>
+                            )}
+                          </Box>
+                          <Text fontSize="sm" userSelect="none">
+                            {role.replace("_", " ")}
+                          </Text>
+                        </HStack>
+                      );
+                    })}
                   </HStack>
                 </Field>
               </VStack>
