@@ -38,7 +38,7 @@ import { normalizeRole } from "@/store/types";
 import { LuSearch, LuPlus, LuPencil, LuTrash2, LuChevronUp, LuChevronDown } from "react-icons/lu";
 import { formatDistanceToNow } from "date-fns";
 
-type SortKey = "name" | "email" | "role" | "status" | "createdAt";
+type SortKey = "name" | "email" | "role" | "status" | "online" | "createdAt";
 
 const emptyForm = {
   firstName: "",
@@ -291,7 +291,7 @@ export default function AdminUsersPage() {
                     }}
                   />
                 </th>
-                {([["name", "Name"], ["email", "Email"], ["role", "Role"], ["status", "Status"], ["createdAt", "Joined"]] as [SortKey, string][]).map(([k, label]) => (
+                {([["name", "Name"], ["email", "Email"], ["role", "Role"], ["status", "Status"], ["online", "Online"], ["createdAt", "Joined"]] as [SortKey, string][]).map(([k, label]) => (
                   <th key={k} style={{ padding: "10px 16px", textAlign: "left", fontSize: "12px", fontWeight: "600", color: "var(--chakra-colors-fg-muted)", cursor: "pointer", whiteSpace: "nowrap" }} onClick={() => toggleSort(k)}>
                     <HStack gap="1" display="inline-flex">{label}<SortIcon k={k} /></HStack>
                   </th>
@@ -301,7 +301,7 @@ export default function AdminUsersPage() {
             </thead>
             <tbody>
               {paginated.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding: "32px", textAlign: "center", color: "var(--chakra-colors-fg-muted)" }}>No users found</td></tr>
+                <tr><td colSpan={8} style={{ padding: "32px", textAlign: "center", color: "var(--chakra-colors-fg-muted)" }}>No users found</td></tr>
               ) : paginated.map((u) => (
                 <tr key={u.id} style={{ borderTop: "1px solid var(--chakra-colors-border)", background: selected.includes(u.id) ? "var(--chakra-colors-blue-50)" : undefined }}>
                   <td style={{ padding: "12px 16px" }}>

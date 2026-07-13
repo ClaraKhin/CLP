@@ -3,6 +3,7 @@ import { useStore } from "@/store/store";
 import { Toaster } from "@/components/ui/toaster";
 import { Box, Spinner, VStack, Text } from "@chakra-ui/react";
 import AppShell from "@/components/AppShell";
+import { supabase } from "@/lib/supabase";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
@@ -35,13 +36,31 @@ type Page =
   | "admin-email";
 
 function AppContent() {
-  const { auth, loading, fetchAllData } = useStore();
+  const { auth, loading, fetchAllData, subscribeToRealtime } = useStore();
   const [page, setPage] = useState<Page>("login");
 
   // Fetch all data on mount
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
+
+  // Subscribe to real-time session / presence updates
+  useEffect(() => {
+    const unsubscribe = subscribeToRealtime();
+    return () => unsubscribe();
+  }, [subscribeToRealtime]);
+
+  // Cleanup current session on tab/browser close
+  useEffect(() => {
+    const handleUnload = () => {
+      const sessionId = useStore.getState().auth.currentSessionId;
+      if (sessionId) {
+        supabase.rpc("cleanup_session", { session_id: sessionId });
+      }
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    return () => window.removeEventListener("beforeunload", handleUnload);
+  }, []);
 
   // Redirect to dashboard when authenticated
   useEffect(() => {

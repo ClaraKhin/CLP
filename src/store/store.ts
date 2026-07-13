@@ -2,6 +2,11 @@ import { create } from "zustand";
 import { supabase, generateId, generateSecret } from "@/lib/supabase";
 import type { User, UserRole, Application, Role, LoginActivity, Session, SSOProvider, EmailTemplate, PermissionMatrix } from "./types";
 
+// Realtime / presence state (module-level, outside the store)
+let realtimeUnsubscribe: (() => void) | null = null;
+let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+let currentSessionId: string | null = null;
+
 // TOTP implementation using Web Crypto API (no external library needed)
 
 function base32Decode(input: string): Uint8Array {
@@ -96,6 +101,8 @@ const dbToAppUser = (dbUser: any): User => ({
   password: dbUser.password_hash,
   favoriteApps: dbUser.favorite_apps || [],
   lastLogin: dbUser.last_login,
+  lastSeenAt: dbUser.last_seen_at,
+  isOnline: dbUser.is_online,
   createdAt: dbUser.created_at,
   updatedAt: dbUser.updated_at,
   sessionCount: dbUser.session_count,
@@ -120,6 +127,8 @@ const appToDbUser = (user: Partial<User>) => ({
   password_hash: user.password,
   favorite_apps: user.favoriteApps,
   last_login: user.lastLogin,
+  last_seen_at: user.lastSeenAt,
+  is_online: user.isOnline,
   session_count: user.sessionCount,
   notifications_enabled: user.notificationsEnabled,
   email_notifications: user.emailNotifications,
@@ -251,6 +260,20 @@ const parseDeviceAndBrowser = (userAgent: string): { device: string; browser: st
   return { device, browser };
 };
 
+const getOS = (userAgent: string): string => {
+  const ua = userAgent.toLowerCase();
+  if (/windows nt 10/.test(ua)) return "Windows 10";
+  if (/windows nt 11/.test(ua)) return "Windows 11";
+  if (/windows nt 6\.3/.test(ua)) return "Windows 8.1";
+  if (/windows nt 6\.2/.test(ua)) return "Windows 8";
+  if (/windows nt 6\.1/.test(ua)) return "Windows 7";
+  if (/macintosh|mac os x/.test(ua)) return "macOS";
+  if (/iphone|ipad|ipod/.test(ua)) return "iOS";
+  if (/android/.test(ua)) return "Android";
+  if (/linux/.test(ua)) return "Linux";
+  return "Unknown OS";
+};
+
 const fetchClientActivityDetails = async (): Promise<ActivityDetails> => {
   if (cachedActivityDetails) {
     const cached = await cachedActivityDetails;
@@ -334,6 +357,7 @@ export interface MockStore {
     isAuthenticated: boolean;
     step: "idle" | "password" | "2fa" | "authenticated";
     pendingUserId?: string;
+    currentSessionId?: string;
   };
   colorMode: "light" | "dark";
   loading: boolean;
@@ -341,7 +365,7 @@ export interface MockStore {
   // Auth actions
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string; requires2FA?: boolean }>;
   verify2FA: (code: string) => Promise<{ success: boolean; error?: string }>;
-  logout: () => void;
+  logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
   resetPassword: (email: string, newPassword: string) => Promise<{ success: boolean }>;
   register: (data: Partial<User> & { password: string }) => Promise<{ success: boolean; error?: string }>;
@@ -349,6 +373,12 @@ export interface MockStore {
   enable2FA: (code: string) => Promise<{ success: boolean; error?: string }>;
   disable2FA: () => Promise<void>;
   getCurrentTOTPCode: (secret: string) => Promise<string>;
+  completeLogin: (dbUser: any, user: User) => Promise<void>;
+
+  // Realtime / presence
+  subscribeToRealtime: () => () => void;
+  startHeartbeat: () => void;
+  stopHeartbeat: () => void;
 
   // User actions
   addUser: (user: Omit<User, "id" | "createdAt" | "updatedAt">) => Promise<void>;
@@ -412,6 +442,7 @@ export const useStore = create<MockStore>((set, get) => ({
     isAuthenticated: false,
     step: "idle",
     pendingUserId: undefined,
+    currentSessionId: undefined,
   },
 
   fetchAllData: async (options?: { silent?: boolean }) => {
@@ -506,22 +537,7 @@ export const useStore = create<MockStore>((set, get) => ({
       return { success: true, requires2FA: true };
     }
 
-    const activityDetails = await fetchClientActivityDetails();
-    await Promise.all([
-      supabase.from("login_activity").insert({
-        user_id: user.id,
-        user_email: user.email,
-        user_name: `${user.firstName} ${user.lastName}`,
-        status: "success",
-        ...activityDetails,
-      }),
-      supabase.from("users").update({ last_login: new Date().toISOString() }).eq("id", user.id),
-    ]);
-
-    set((s) => ({
-      auth: { user, isAuthenticated: true, step: "authenticated" },
-    }));
-    get().fetchAllData();
+    await get().completeLogin(dbUser, user);
     return { success: true };
   },
 
@@ -575,22 +591,7 @@ export const useStore = create<MockStore>((set, get) => ({
       return { success: false, error: "Invalid authentication code. Please try again." };
     }
 
-    const activityDetails = await fetchClientActivityDetails();
-    await Promise.all([
-      supabase.from("login_activity").insert({
-        user_id: user.id,
-        user_email: user.email,
-        user_name: `${user.firstName} ${user.lastName}`,
-        status: "success",
-        ...activityDetails,
-      }),
-      supabase.from("users").update({ last_login: new Date().toISOString() }).eq("id", user.id),
-    ]);
-
-    set((s) => ({
-      auth: { user, isAuthenticated: true, step: "authenticated", pendingUserId: undefined },
-    }));
-    get().fetchAllData();
+    await get().completeLogin(dbUser, user);
     return { success: true };
   },
 
@@ -658,8 +659,136 @@ export const useStore = create<MockStore>((set, get) => ({
     get().fetchAllData();
   },
 
-  logout: () => {
-    set({ auth: { user: null, isAuthenticated: false, step: "idle" } });
+  completeLogin: async (dbUser, user) => {
+    const activityDetails = await fetchClientActivityDetails();
+    const timestamp = new Date().toISOString();
+    const userAgent = typeof window !== "undefined" ? window.navigator.userAgent || "" : "";
+
+    const { data: insertedSessions } = await supabase
+      .from("sessions")
+      .insert({
+        user_id: user.id,
+        device: activityDetails.device,
+        browser: activityDetails.browser,
+        os: getOS(userAgent),
+        ip: activityDetails.ip,
+        location: activityDetails.location,
+        last_active: timestamp,
+        is_current: true,
+      })
+      .select();
+
+    const sessionId = insertedSessions?.[0]?.id;
+    if (sessionId) {
+      currentSessionId = sessionId;
+    }
+
+    await Promise.all([
+      supabase.from("login_activity").insert({
+        user_id: user.id,
+        user_email: user.email,
+        user_name: `${user.firstName} ${user.lastName}`,
+        status: "success",
+        ...activityDetails,
+      }),
+      supabase.from("users").update({
+        last_login: timestamp,
+        last_seen_at: timestamp,
+        is_online: true,
+        session_count: (dbUser.session_count || 0) + 1,
+      }).eq("id", user.id),
+    ]);
+
+    set((s) => ({
+      auth: {
+        ...s.auth,
+        user,
+        isAuthenticated: true,
+        step: "authenticated",
+        pendingUserId: undefined,
+        currentSessionId: sessionId,
+      },
+    }));
+    get().fetchAllData({ silent: true });
+    get().startHeartbeat();
+  },
+
+  logout: async () => {
+    const { auth } = get();
+    const sessionId = auth.currentSessionId || currentSessionId;
+    const userId = auth.user?.id;
+
+    if (sessionId) {
+      await supabase.from("sessions").delete().eq("id", sessionId);
+    }
+    if (userId) {
+      const { count } = await supabase
+        .from("sessions")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId);
+      await supabase.from("users").update({
+        is_online: (count || 0) > 0,
+        last_seen_at: new Date().toISOString(),
+      }).eq("id", userId);
+    }
+
+    get().stopHeartbeat();
+    currentSessionId = null;
+    set({ auth: { user: null, isAuthenticated: false, step: "idle", currentSessionId: undefined } });
+  },
+
+  subscribeToRealtime: () => {
+    if (realtimeUnsubscribe) return realtimeUnsubscribe;
+
+    const sessionsChannel = supabase
+      .channel("public:sessions")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sessions" },
+        () => {
+          get().fetchAllData({ silent: true });
+        }
+      )
+      .subscribe();
+
+    const usersChannel = supabase
+      .channel("public:users")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "users" },
+        () => {
+          get().fetchAllData({ silent: true });
+        }
+      )
+      .subscribe();
+
+    realtimeUnsubscribe = () => {
+      supabase.removeChannel(sessionsChannel);
+      supabase.removeChannel(usersChannel);
+      realtimeUnsubscribe = null;
+    };
+
+    return realtimeUnsubscribe;
+  },
+
+  startHeartbeat: () => {
+    if (heartbeatInterval) return;
+    heartbeatInterval = setInterval(() => {
+      const sessionId = currentSessionId || get().auth.currentSessionId;
+      const userId = get().auth.user?.id;
+      if (!sessionId || !userId) return;
+
+      const timestamp = new Date().toISOString();
+      supabase.from("sessions").update({ last_active: timestamp }).eq("id", sessionId);
+      supabase.from("users").update({ last_seen_at: timestamp, is_online: true }).eq("id", userId);
+    }, 30000);
+  },
+
+  stopHeartbeat: () => {
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
   },
 
   forgotPassword: async (email) => {
@@ -1034,19 +1163,48 @@ export const useStore = create<MockStore>((set, get) => ({
 
   // Sessions
   terminateSession: async (sessionId) => {
+    const { auth, sessions } = get();
+    const session = sessions.find((s) => s.id === sessionId);
+    const isCurrent = sessionId === auth.currentSessionId || sessionId === currentSessionId || session?.isCurrent;
+    const userId = session?.userId || auth.user?.id;
+
     await supabase.from("sessions").delete().eq("id", sessionId);
-    get().fetchAllData();
+
+    if (userId) {
+      const { count } = await supabase.from("sessions").select("*", { count: "exact", head: true }).eq("user_id", userId);
+      await supabase.from("users").update({
+        is_online: (count || 0) > 0,
+        session_count: count || 0,
+        last_seen_at: new Date().toISOString(),
+      }).eq("id", userId);
+    }
+
+    if (isCurrent) {
+      currentSessionId = null;
+      get().stopHeartbeat();
+      set({ auth: { user: null, isAuthenticated: false, step: "idle", currentSessionId: undefined } });
+    } else {
+      get().fetchAllData();
+    }
   },
 
   terminateAllOtherSessions: async () => {
     const { auth, sessions } = get();
     if (!auth.user) return;
 
-    const otherSessions = sessions.filter((s) => s.userId === auth.user!.id && !s.isCurrent);
+    const otherSessions = sessions.filter((s) => s.userId === auth.user.id && !s.isCurrent);
     const ids = otherSessions.map((s) => s.id);
     if (ids.length > 0) {
       await supabase.from("sessions").delete().in("id", ids);
     }
+
+    const { count } = await supabase.from("sessions").select("*", { count: "exact", head: true }).eq("user_id", auth.user.id);
+    await supabase.from("users").update({
+      is_online: (count || 0) > 0,
+      session_count: count || 0,
+      last_seen_at: new Date().toISOString(),
+    }).eq("id", auth.user.id);
+
     get().fetchAllData();
   },
 

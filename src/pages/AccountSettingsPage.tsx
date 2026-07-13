@@ -562,6 +562,17 @@ export default function AccountSettingsPage() {
               </Button>
             </HStack>
 
+            <HStack gap="2" mb="4">
+              <Badge colorPalette={user.isOnline ? "green" : "gray"} size="sm">
+                {user.isOnline ? "Online" : "Offline"}
+              </Badge>
+              {user.lastSeenAt && (
+                <Text fontSize="xs" color="fg.muted">
+                  Last seen {formatDistanceToNow(new Date(user.lastSeenAt), { addSuffix: true })}
+                </Text>
+              )}
+            </HStack>
+
             <VStack gap="3" alignItems="stretch">
               {userSessions.length === 0 ? (
                 <Text color="fg.muted" fontSize="sm">No active sessions found.</Text>
