@@ -30,6 +30,8 @@ export interface DbUser {
   password_hash: string;
   favorite_apps: string[];
   last_login?: string;
+  last_seen_at?: string;
+  is_online?: boolean;
   created_at: string;
   updated_at: string;
   session_count: number;

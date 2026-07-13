@@ -70,6 +70,8 @@ export interface User {
   favoriteApps: string[];
   lastLogin?: string;
   lastLoginIp?: string;
+  lastSeenAt?: string;
+  isOnline?: boolean;
   createdAt: string;
   updatedAt: string;
   sessionCount: number;
