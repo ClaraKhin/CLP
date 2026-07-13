@@ -88,7 +88,6 @@ const dbToAppUser = (dbUser: any): User => ({
   lastName: dbUser.last_name,
   role: dbUser.role,
   status: dbUser.status,
-  isOnline: dbUser.is_online ?? false,
   avatar: dbUser.avatar,
   phone: dbUser.phone || "",
   department: dbUser.department || "",
@@ -321,7 +320,6 @@ const fetchClientActivityDetails = async (): Promise<ActivityDetails> => {
 
   return cachedActivityDetails;
 };
-
 
 export interface MockStore {
   users: User[];

@@ -78,8 +78,6 @@ export interface User {
   theme: "light" | "dark" | "system";
   language: string;
   timezone: string;
-  isOnline: boolean;
-  lastSeenAt?: string;
 }
 
 export interface Session {
@@ -169,7 +167,7 @@ export interface MockStore {
   // Auth actions
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string; requires2FA?: boolean }>;
   verify2FA: (code: string) => Promise<{ success: boolean; error?: string }>;
-  logout: () => Promise<void>;
+  logout: () => void;
   forgotPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
   resetPassword: (email: string, newPassword: string) => Promise<{ success: boolean }>;
   register: (data: Partial<User> & { password: string }) => Promise<{ success: boolean; error?: string }>;
