@@ -12,6 +12,7 @@ import {
   Separator,
 } from "@chakra-ui/react";
 import { useStore } from "@/store/store";
+import { normalizeRole } from "@/store/types";
 import {
   LuUsers,
   LuMonitor,
@@ -36,7 +37,12 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const user = auth.user!;
 
   const userApps = useMemo(
-    () => applications.filter((a) => a.allowedRoles.includes(user.role) && a.status !== "inactive").slice(0, 6),
+    () =>
+      applications
+        .filter(
+          (a) => a.allowedRoles.some((role) => normalizeRole(role) === normalizeRole(user.role)) && a.status !== "inactive"
+        )
+        .slice(0, 6),
     [applications, user.role]
   );
 

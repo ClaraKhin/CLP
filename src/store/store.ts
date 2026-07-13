@@ -900,7 +900,12 @@ export const useStore = create<MockStore>((set, get) => ({
       allowed_roles: appData.allowedRoles || [],
     };
 
-    await supabase.from("applications").insert(newApp);
+    const { data: inserted } = await supabase.from("applications").insert(newApp).select();
+    if (inserted && inserted.length > 0) {
+      set((state) => ({
+        applications: [...state.applications, dbToAppApplication(inserted[0])],
+      }));
+    }
     get().fetchAllData();
   },
 
